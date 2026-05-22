@@ -1,0 +1,66 @@
+=====================================================
+  WORKFLOW-TRIGGER E-MAIL FORMAT
+  Hannah's Webdesign – Demo-Website Generator
+=====================================================
+
+BETREFF (Subject): Workflow
+
+TEXT (Body) – exakt dieses Format verwenden:
+------------------------------------------------------
+
+Unternehmensname: Muster Sanitär GmbH
+Branche: Sanitär und Heizungstechnik
+Website: https://www.muster-sanitaer.de
+Logo: https://www.muster-sanitaer.de/logo.png
+Logo-Facelift: nein
+Region: München und Umgebung
+Leistungen: Sanitärinstallation, Heizungsmodernisierung, Badezimmersanierung, Notdienst 24/7
+Zielgruppe: Privatkunden und Hausverwalter in München
+Stil: Modern, vertrauenswürdig, blau-weiß, seriös und handwerklich
+
+------------------------------------------------------
+
+FELDERKLAERUNG:
+---------------
+Unternehmensname  → Offizieller Firmenname (wird auch als URL-Slug verwendet)
+Branche           → Branche / Haupttätigkeit
+Website           → Bestehende Website-URL ODER: keine
+Logo              → Direkte Bild-URL zum Logo ODER: kein
+Logo-Facelift     → ja / nein (erstellt 3 Logo-Konzepte per KI)
+Region            → Einsatzgebiet / Standort
+Leistungen        → Kommagetrennte Liste der Angebote
+Zielgruppe        → Wer sind die Kunden?
+Stil              → Designwünsche, Farben, Stimmung
+
+BEISPIELE:
+----------
+
+Beispiel 1 – Kanzlei ohne Website:
+  Unternehmensname: Rechtsanwaltskanzlei Weber
+  Branche: Rechtsanwalt – Familienrecht und Erbrecht
+  Website: keine
+  Logo: kein
+  Logo-Facelift: ja
+  Region: Hamburg Altona
+  Leistungen: Scheidungsrecht, Erbschaftsstreitigkeiten, Unterhalt, Familienmediation
+  Zielgruppe: Familien und Senioren in Hamburg
+  Stil: Seriös, dunkelblau und gold, vertrauensvoll, klassisch
+
+Beispiel 2 – Restaurant mit bestehendem Logo:
+  Unternehmensname: Trattoria Bella Italia
+  Branche: Italienisches Restaurant
+  Website: https://www.bella-italia-berlin.de
+  Logo: https://www.bella-italia-berlin.de/images/logo.svg
+  Logo-Facelift: nein
+  Region: Berlin Mitte
+  Leistungen: Mittagstisch, À-la-carte Dinner, Catering, Eventbewirtung
+  Zielgruppe: Berufstätige und Familien in Berlin
+  Stil: Warm, mediterran, rot-grün-weiß, lebendig und gemütlich
+
+WICHTIG:
+--------
+- E-Mail immer von deiner konfigurierten Gmail-Adresse senden
+- Betreff MUSS exakt "Workflow" sein (Groß-/Kleinschreibung beachten)
+- Felder müssen exakt so benannt sein wie oben (inkl. Bindestrich bei Logo-Facelift)
+- Pro E-Mail = ein Demo-Auftrag
+- Nach ca. 3-5 Minuten erhältst du die Bestätigungs-E-Mail mit dem Vorschau-Link

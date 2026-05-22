@@ -1,0 +1,877 @@
+{
+  "name": "Demo-Website Generator | Hannahs Webdesign",
+  "nodes": [
+    {
+      "id": "node-email-trigger",
+      "name": "Email Trigger (Gmail)",
+      "type": "n8n-nodes-base.gmailTrigger",
+      "typeVersion": 1,
+      "position": [250, 400],
+      "parameters": {
+        "filters": {
+          "q": "subject:Workflow"
+        },
+        "options": {}
+      },
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "REPLACE_WITH_YOUR_GMAIL_CREDENTIAL_ID",
+          "name": "Gmail Account"
+        }
+      }
+    },
+    {
+      "id": "node-parse-email",
+      "name": "Parse Email Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [500, 400],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const item = $input.first().json;\nconst body = item.text || item.snippet || item.body || item.textPlain || '';\n\nfunction parseField(text, ...names) {\n  for (const name of names) {\n    const escaped = name.replace(/[-]/g, '\\\\-');\n    const match = text.match(new RegExp(escaped + ':\\\\s*(.+)', 'im'));\n    if (match) return match[1].trim();\n  }\n  return '';\n}\n\nconst companyName = parseField(body, 'Unternehmensname', 'Firma', 'Unternehmen');\nconst industry = parseField(body, 'Branche', 'Industry');\nconst websiteRaw = parseField(body, 'Website', 'Webseite');\nconst logoInfo = parseField(body, 'Logo');\nconst logoFaceliftRaw = parseField(body, 'Logo-Facelift', 'Facelift', 'Logo Facelift');\nconst region = parseField(body, 'Region', 'Ort', 'Standort');\nconst services = parseField(body, 'Leistungen', 'Services', 'Angebote');\nconst targetGroup = parseField(body, 'Zielgruppe', 'Kunden', 'Zielgruppe');\nconst style = parseField(body, 'Stil', 'Style', 'Design', 'Stilwunsch');\n\n// Build URL-safe slug from company name\nconst slug = (companyName || 'demo')\n  .toLowerCase()\n  .replace(/\\u00e4/g, 'ae').replace(/\\u00f6/g, 'oe')\n  .replace(/\\u00fc/g, 'ue').replace(/\\u00df/g, 'ss')\n  .replace(/[^a-z0-9]+/g, '-')\n  .replace(/^-+|-+$/g, '') || 'demo';\n\nconst noWebsiteValues = ['keine', 'kein', 'nein', 'no', 'none', '-', ''];\nconst hasWebsite = !!websiteRaw &&\n  !noWebsiteValues.includes(websiteRaw.toLowerCase()) &&\n  websiteRaw.startsWith('http');\n\nconst noLogoValues = ['kein', 'keine', 'facelift', 'nein', 'no', 'none', '-', ''];\nconst logoUrl = (!!logoInfo &&\n  !noLogoValues.includes(logoInfo.toLowerCase()) &&\n  logoInfo.startsWith('http')) ? logoInfo : null;\n\nconst logoFacelift = ['ja', 'yes', 'true', '1'].includes((logoFaceliftRaw || '').toLowerCase());\n\nconst fromAddr = item.from?.email || (typeof item.from === 'string' ? item.from : '') || '';\n\nreturn [{\n  json: {\n    companyName,\n    industry,\n    websiteUrl: hasWebsite ? websiteRaw : null,\n    logoUrl,\n    logoFacelift,\n    region,\n    services,\n    targetGroup,\n    style,\n    slug,\n    previewUrl: `https://www.hannahs-webdesign.de/${slug}/`,\n    remotePath: `/httpdocs/${slug}`,\n    hasWebsite,\n    hasLogo: !!logoUrl,\n    fromEmail: fromAddr,\n    crawledContent: ''\n  }\n}];"
+      }
+    },
+    {
+      "id": "node-has-website",
+      "name": "Hat Website?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [750, 400],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "website-check",
+              "leftValue": "={{ $json.hasWebsite }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      }
+    },
+    {
+      "id": "node-fetch-homepage",
+      "name": "Website crawlen (Homepage)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1000, 260],
+      "parameters": {
+        "url": "={{ $('Parse Email Data').first().json.websiteUrl }}",
+        "options": {
+          "timeout": 15000,
+          "response": {
+            "response": {
+              "fullResponse": false
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "node-extract-content",
+      "name": "Content extrahieren",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1250, 260],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const html = $input.first().json.data || $input.first().json.body || '';\nconst companyData = $('Parse Email Data').first().json;\n\n// Strip HTML, extract readable text\nconst text = html\n  .replace(/<script[\\s\\S]*?<\\/script>/gi, '')\n  .replace(/<style[\\s\\S]*?<\\/style>/gi, '')\n  .replace(/<!--[\\s\\S]*?-->/g, '')\n  .replace(/<br\\s*\\/?>/gi, '\\n')\n  .replace(/<\\/p>/gi, '\\n').replace(/<\\/div>/gi, '\\n')\n  .replace(/<[^>]+>/g, ' ')\n  .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')\n  .replace(/&nbsp;/g, ' ').replace(/&quot;/g, '\"')\n  .replace(/[ \\t]+/g, ' ')\n  .split('\\n').map(l => l.trim()).filter(l => l.length > 20)\n  .join('\\n')\n  .substring(0, 5000);\n\n// Find up to 3 internal subpage links\nconst baseUrl = companyData.websiteUrl || '';\nconst baseHost = (baseUrl.match(/^https?:\\/\\/([^/]+)/) || [])[1] || '';\nconst linkRe = /href=[\"']([^\"'#?]+)[\"']/g;\nconst links = [];\nlet m;\nwhile ((m = linkRe.exec(html)) !== null && links.length < 5) {\n  const href = m[1];\n  if (!href || href.length < 2) continue;\n  const full = href.startsWith('http') ? href\n    : `${baseUrl.replace(/\\/$/, '')}/${href.replace(/^\\//, '')}`;\n  if (full.includes(baseHost) && !links.includes(full) && full !== baseUrl\n      && !full.match(/\\.(jpg|jpeg|png|gif|pdf|svg|ico|css|js)/i)) {\n    links.push(full);\n  }\n}\n\nconst crawledContent = text\n  ? `Bestehende Website (${baseUrl}):\\n${text}\\n`\n  : '';\n\nreturn [{\n  json: {\n    ...companyData,\n    crawledContent,\n    subpageLinks: links.slice(0, 3)\n  }\n}];"
+      }
+    },
+    {
+      "id": "node-fetch-subpages",
+      "name": "Unterseiten crawlen",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1500, 260],
+      "parameters": {
+        "url": "={{ $json.subpageLinks[0] || $json.websiteUrl }}",
+        "options": {
+          "timeout": 10000
+        }
+      }
+    },
+    {
+      "id": "node-merge-subpages",
+      "name": "Unterseiten-Content zusammenführen",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1750, 260],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const subHtml = $input.first().json.data || '';\nconst prev = $('Content extrahieren').first().json;\n\nconst subText = subHtml\n  .replace(/<script[\\s\\S]*?<\\/script>/gi, '')\n  .replace(/<style[\\s\\S]*?<\\/style>/gi, '')\n  .replace(/<[^>]+>/g, ' ')\n  .replace(/[ \\t]+/g, ' ')\n  .split('\\n').map(l => l.trim()).filter(l => l.length > 20)\n  .join('\\n')\n  .substring(0, 2000);\n\nconst combined = prev.crawledContent + (subText ? `\\nWeitere Unterseiten:\\n${subText}` : '');\n\nreturn [{\n  json: {\n    ...prev,\n    crawledContent: combined.substring(0, 6000)\n  }\n}];"
+      }
+    },
+    {
+      "id": "node-set-empty-crawl",
+      "name": "Kein Website-Crawl (leer)",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.3,
+      "position": [1000, 540],
+      "parameters": {
+        "mode": "keepAllExcept",
+        "include": "allFields",
+        "fields": {
+          "values": []
+        }
+      }
+    },
+    {
+      "id": "node-merge-crawl",
+      "name": "Crawl-Daten mergen",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [2000, 400],
+      "parameters": {
+        "mode": "append"
+      }
+    },
+    {
+      "id": "node-generate-index",
+      "name": "Index HTML generieren (Groq)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [2250, 400],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.groq.com/openai/v1/chat/completions",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.GROQ_API_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"llama-3.3-70b-versatile\",\n  \"temperature\": 0.7,\n  \"max_tokens\": 8000,\n  \"messages\": [\n    {\n      \"role\": \"system\",\n      \"content\": \"Du bist ein erstklassiger Web-Entwickler und Designer. Du erstellst professionelle, moderne deutsche Websites. Dein Output ist ausschliesslich sauberer, valider HTML-Code ohne Erklarungen oder Markdown-Formatting. Kein ```html Block, nur reines HTML.\"\n    },\n    {\n      \"role\": \"user\",\n      \"content\": \"Erstelle eine vollstandige, moderne und individuelle index.html fur ein deutsches Unternehmen.\\n\\nFIRMENDATEN:\\nName: {{ $json.companyName }}\\nBranche: {{ $json.industry }}\\nRegion: {{ $json.region }}\\nLeistungen: {{ $json.services }}\\nZielgruppe: {{ $json.targetGroup }}\\nStilwunsche: {{ $json.style }}\\n\\n{{ $json.crawledContent ? 'INFORMATIONEN VON DER BESTEHENDEN WEBSITE:\\n' + $json.crawledContent : '' }}\\n\\nANFORDERUNGEN:\\n1. Vollstandige valide HTML5-Datei mit DOCTYPE\\n2. Verlinkt auf externes styles.css\\n3. Fixierte Navigation oben: Logo-Platzhalter (logo.png) + Firmenname, Links: Home|Leistungen|Uber uns|Kontakt und ein prominenter CTA-Button 'Angebot anfragen' -> angebot.html\\n4. Hero-Sektion: Vollbild-Hintergrundbild image-01.jpg mit dunklem Overlay, grosser Headline mit Firmenname und branchentypischem Slogan, CTA-Button -> angebot.html\\n5. Uber-uns Sektion mit Bild image-02.jpg rechts und Text links (basierend auf Firmendaten)\\n6. Leistungen-Sektion: 3-4 Karten mit Icons (Unicode/SVG), Bild image-03.jpg als Sektionshintergrund\\n7. Vorteile/USP Sektion mit 3 Punkten und image-04.jpg\\n8. Referenzen/Kundenstimmen Sektion: 3 fiktive aber glaubwurdige Testimonials\\n9. Galerie-Sektion: Bilder image-05.jpg bis image-08.jpg in einem Grid\\n10. Kontakt-Sektion: Adresse in {{ $json.region }}, Tel, Email (Platzhalter), Karte-Platzhalter\\n11. Professioneller Footer mit Links\\n12. KEIN generisches Template-Design - individuell und branchentypisch fuer {{ $json.industry }}\\n13. Alle Bild-Referenzen relativ: image-01.jpg bis image-10.jpg\\n14. Responsiv mit CSS-Grid/Flexbox\\n15. Meta-Tags: title, description, og-tags\\n\\nAusgabe: NUR den HTML-Code, kein Markdown, keine Erklarungen.\"\n    }\n  ]\n}",
+        "options": {
+          "timeout": 120000
+        }
+      }
+    },
+    {
+      "id": "node-generate-angebot",
+      "name": "Angebot HTML generieren (Groq)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [2500, 400],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.groq.com/openai/v1/chat/completions",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.GROQ_API_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"llama-3.3-70b-versatile\",\n  \"temperature\": 0.7,\n  \"max_tokens\": 3000,\n  \"messages\": [\n    {\n      \"role\": \"system\",\n      \"content\": \"Du bist Web-Designer. Ausgabe ist ausschliesslich reiner HTML-Code ohne Erklarungen.\"\n    },\n    {\n      \"role\": \"user\",\n      \"content\": \"Erstelle eine moderne angebot.html CTA-Seite.\\n\\nKONTEXT:\\nDiese Seite gehort zu Hannah's Webdesign, NICHT zu {{ $('Parse Email Data').first().json.companyName }}.\\nSie erscheint wenn jemand auf 'Angebot anfragen' in der Demo-Website klickt.\\n\\nINHALT DER SEITE:\\n1. Navigation: Logo 'Hannah's Webdesign' + Link zuruck zur Demo (index.html)\\n2. Hero: Headline 'Gefallt Ihnen diese Website-Demo?' + Subheadline\\n3. Erklarungs-Sektion: 'Das war eine kostenlose personalisierte Demo-Vorschau, erstellt speziell fur {{ $('Parse Email Data').first().json.companyName }}'\\n4. Paket-Ubersicht: Was ist im vollstandigen Website-Paket enthalten (Design, Entwicklung, Hosting-Setup, SEO-Grundlagen, Pflegeanleitung)\\n5. Preishinweis: 'Individuelle Angebote ab 599 Euro'\\n6. Grosser CTA: 'Jetzt Angebot anfordern' -> mailto:info@hannahs-webdesign.de\\n7. Kontaktinfos: Hannah's Webdesign, info@hannahs-webdesign.de, hannahs-webdesign.de\\n8. Footer\\n\\nSTIL:\\n- Gleiche styles.css wie index.html\\n- Farben passend zu: {{ $('Parse Email Data').first().json.style }}\\n- Professionell und einladend\\n\\nAusgabe: NUR HTML-Code.\"\n    }\n  ]\n}",
+        "options": {
+          "timeout": 60000
+        }
+      }
+    },
+    {
+      "id": "node-generate-css",
+      "name": "CSS generieren (Groq)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [2750, 400],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.groq.com/openai/v1/chat/completions",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.GROQ_API_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"llama-3.3-70b-versatile\",\n  \"temperature\": 0.6,\n  \"max_tokens\": 4000,\n  \"messages\": [\n    {\n      \"role\": \"system\",\n      \"content\": \"Du bist CSS-Designer. Ausgabe ist ausschliesslich reiner CSS-Code ohne Erklarungen oder Markdown.\"\n    },\n    {\n      \"role\": \"user\",\n      \"content\": \"Erstelle ein professionelles, modernes styles.css fuer eine {{ $('Parse Email Data').first().json.industry }}-Website.\\n\\nSTILWUNSCHE: {{ $('Parse Email Data').first().json.style }}\\n\\nANFORDERUNGEN:\\n1. CSS Custom Properties fuer alle Farben (--primary, --secondary, --accent, --text, --bg)\\n2. Google Fonts Import (2 Fonts: eine fuer Headlines, eine fuer Text)\\n3. CSS Reset / Box-sizing\\n4. Navigation: fixiert oben, Hintergrund transparent -> solid beim Scrollen (CSS-Klasse .scrolled), Hamburger-Menu Mobile\\n5. Hero-Sektion: Vollbild (100vh), background-image, dunkles Overlay, zentrlicher Text\\n6. Abschnitt-Styling: abwechselnde Hintergrundfarben, grosszugige Padding\\n7. Karten-Komponente .card: Schatten, Hover-Effekt, Border-Radius\\n8. Button-Varianten: .btn-primary, .btn-secondary mit Hover-Animationen\\n9. Galerie: CSS-Grid, Bilder mit Aspect-Ratio und Overlay-Effekt\\n10. Kontakt-Sektion: Grid-Layout\\n11. Footer: Dunkler Hintergrund\\n12. Responsive Breakpoints: 768px und 1200px\\n13. Scroll-Animationen: .fade-in Klasse mit CSS-Animation\\n14. Branchentypische Farbpalette passend zu: {{ $('Parse Email Data').first().json.style }}\\n\\nAusgabe: NUR CSS-Code.\"\n    }\n  ]\n}",
+        "options": {
+          "timeout": 60000
+        }
+      }
+    },
+    {
+      "id": "node-create-image-prompts",
+      "name": "Bild-Prompts erstellen",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [3000, 400],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const d = $('Parse Email Data').first().json;\nconst company = d.companyName;\nconst industry = d.industry;\nconst region = d.region;\nconst services = d.services;\nconst style = d.style;\n\nconst baseStyle = 'photorealistic, professional quality, 16:9 format, high resolution, no text, no watermark';\n\nconst prompts = [\n  `Hero image: ${industry} professional business in ${region}, modern exterior or team photo, impressive, cinematic lighting, ${baseStyle}`,\n  `Professional team of ${industry} workers, friendly smiling, modern work environment, authentic German business, ${baseStyle}`,\n  `Close-up detail shot of ${services.split(',')[0]?.trim() || industry} work, high quality craftsmanship, professional tools, ${baseStyle}`,\n  `Satisfied customer consultation, ${industry} professional presenting results, trust and expertise, ${baseStyle}`,\n  `Modern office or workspace interior, ${industry} company, clean and organized, ${baseStyle}`,\n  `Before-after or finished project result for ${industry}, impressive quality, ${baseStyle}`,\n  `Regional cityscape or landmark of ${region}, business context, golden hour, ${baseStyle}`,\n  `${industry} technology and modern equipment, innovation, professional setting, ${baseStyle}`,\n  `Team collaboration, ${industry} planning meeting, whiteboard or blueprints, professional, ${baseStyle}`,\n  `Abstract concept representing excellence and reliability in ${industry}, modern minimalist, ${style.split(',')[0] || 'professional'} color palette, ${baseStyle}`\n];\n\nreturn prompts.map((prompt, i) => ({\n  json: {\n    imageIndex: i + 1,\n    filename: `image-${String(i + 1).padStart(2, '0')}.jpg`,\n    prompt,\n    slug: d.slug,\n    remotePath: d.remotePath\n  }\n}));"
+      }
+    },
+    {
+      "id": "node-split-images",
+      "name": "Bilder-Loop (10x)",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [3250, 400],
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      }
+    },
+    {
+      "id": "node-generate-image",
+      "name": "Bild generieren (Pollinations.ai)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [3500, 400],
+      "parameters": {
+        "url": "=https://image.pollinations.ai/prompt/{{ encodeURIComponent($json.prompt) }}?width=1280&height=720&nologo=true&model=flux",
+        "options": {
+          "timeout": 90000,
+          "response": {
+            "response": {
+              "responseFormat": "file",
+              "outputPropertyName": "imageData"
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "node-sftp-image",
+      "name": "Bild per SFTP hochladen",
+      "type": "n8n-nodes-base.sftp",
+      "typeVersion": 1,
+      "position": [3750, 400],
+      "parameters": {
+        "operation": "upload",
+        "path": "=/httpdocs/{{ $('Parse Email Data').first().json.slug }}/{{ $json.filename }}",
+        "binaryPropertyName": "imageData"
+      },
+      "credentials": {
+        "sftp": {
+          "id": "REPLACE_WITH_YOUR_STRATO_SFTP_CREDENTIAL_ID",
+          "name": "STRATO SFTP"
+        }
+      }
+    },
+    {
+      "id": "node-has-logo",
+      "name": "Hat Logo-URL?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [4000, 400],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "logo-check",
+              "leftValue": "={{ $('Parse Email Data').first().json.hasLogo }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      }
+    },
+    {
+      "id": "node-download-logo",
+      "name": "Logo herunterladen",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [4250, 260],
+      "parameters": {
+        "url": "={{ $('Parse Email Data').first().json.logoUrl }}",
+        "options": {
+          "timeout": 15000,
+          "response": {
+            "response": {
+              "responseFormat": "file",
+              "outputPropertyName": "logoData"
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "node-sftp-logo",
+      "name": "Logo per SFTP hochladen",
+      "type": "n8n-nodes-base.sftp",
+      "typeVersion": 1,
+      "position": [4500, 260],
+      "parameters": {
+        "operation": "upload",
+        "path": "=/httpdocs/{{ $('Parse Email Data').first().json.slug }}/logo.png",
+        "binaryPropertyName": "logoData"
+      },
+      "credentials": {
+        "sftp": {
+          "id": "REPLACE_WITH_YOUR_STRATO_SFTP_CREDENTIAL_ID",
+          "name": "STRATO SFTP"
+        }
+      }
+    },
+    {
+      "id": "node-needs-facelift",
+      "name": "Logo-Facelift gewünscht?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [4750, 400],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "facelift-check",
+              "leftValue": "={{ $('Parse Email Data').first().json.logoFacelift }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      }
+    },
+    {
+      "id": "node-logo-concept-1",
+      "name": "Logo Konzept 1 generieren",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [5000, 200],
+      "parameters": {
+        "url": "=https://image.pollinations.ai/prompt/{{ encodeURIComponent('Professional modern logo design concept 1 for ' + $('Parse Email Data').first().json.companyName + ', ' + $('Parse Email Data').first().json.industry + ', clean vector style, minimalist, ' + $('Parse Email Data').first().json.style + ', white background, no text except company name, professional branding') }}?width=1024&height=512&nologo=true&model=flux",
+        "options": {
+          "timeout": 90000,
+          "response": {
+            "response": {
+              "responseFormat": "file",
+              "outputPropertyName": "logoConceptData"
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "node-sftp-logo-1",
+      "name": "Logo Konzept 1 hochladen",
+      "type": "n8n-nodes-base.sftp",
+      "typeVersion": 1,
+      "position": [5250, 200],
+      "parameters": {
+        "operation": "upload",
+        "path": "=/httpdocs/{{ $('Parse Email Data').first().json.slug }}/logo-concept-1.jpg",
+        "binaryPropertyName": "logoConceptData"
+      },
+      "credentials": {
+        "sftp": {
+          "id": "REPLACE_WITH_YOUR_STRATO_SFTP_CREDENTIAL_ID",
+          "name": "STRATO SFTP"
+        }
+      }
+    },
+    {
+      "id": "node-logo-concept-2",
+      "name": "Logo Konzept 2 generieren",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [5000, 400],
+      "parameters": {
+        "url": "=https://image.pollinations.ai/prompt/{{ encodeURIComponent('Professional modern logo design concept 2 for ' + $('Parse Email Data').first().json.companyName + ', ' + $('Parse Email Data').first().json.industry + ', bold geometric style, dynamic, ' + $('Parse Email Data').first().json.style + ', white background, corporate identity, professional') }}?width=1024&height=512&nologo=true&model=flux",
+        "options": {
+          "timeout": 90000,
+          "response": {
+            "response": {
+              "responseFormat": "file",
+              "outputPropertyName": "logoConceptData"
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "node-sftp-logo-2",
+      "name": "Logo Konzept 2 hochladen",
+      "type": "n8n-nodes-base.sftp",
+      "typeVersion": 1,
+      "position": [5250, 400],
+      "parameters": {
+        "operation": "upload",
+        "path": "=/httpdocs/{{ $('Parse Email Data').first().json.slug }}/logo-concept-2.jpg",
+        "binaryPropertyName": "logoConceptData"
+      },
+      "credentials": {
+        "sftp": {
+          "id": "REPLACE_WITH_YOUR_STRATO_SFTP_CREDENTIAL_ID",
+          "name": "STRATO SFTP"
+        }
+      }
+    },
+    {
+      "id": "node-logo-concept-3",
+      "name": "Logo Konzept 3 generieren",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [5000, 600],
+      "parameters": {
+        "url": "=https://image.pollinations.ai/prompt/{{ encodeURIComponent('Professional modern logo design concept 3 for ' + $('Parse Email Data').first().json.companyName + ', ' + $('Parse Email Data').first().json.industry + ', elegant script and icon combination, premium look, ' + $('Parse Email Data').first().json.style + ', white background, luxury branding') }}?width=1024&height=512&nologo=true&model=flux",
+        "options": {
+          "timeout": 90000,
+          "response": {
+            "response": {
+              "responseFormat": "file",
+              "outputPropertyName": "logoConceptData"
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "node-sftp-logo-3",
+      "name": "Logo Konzept 3 hochladen",
+      "type": "n8n-nodes-base.sftp",
+      "typeVersion": 1,
+      "position": [5250, 600],
+      "parameters": {
+        "operation": "upload",
+        "path": "=/httpdocs/{{ $('Parse Email Data').first().json.slug }}/logo-concept-3.jpg",
+        "binaryPropertyName": "logoConceptData"
+      },
+      "credentials": {
+        "sftp": {
+          "id": "REPLACE_WITH_YOUR_STRATO_SFTP_CREDENTIAL_ID",
+          "name": "STRATO SFTP"
+        }
+      }
+    },
+    {
+      "id": "node-prepare-files",
+      "name": "Dateien vorbereiten",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [5500, 400],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const d = $('Parse Email Data').first().json;\nconst idxResp = $('Index HTML generieren (Groq)').first().json;\nconst angResp = $('Angebot HTML generieren (Groq)').first().json;\nconst cssResp = $('CSS generieren (Groq)').first().json;\n\nconst indexHtml = (idxResp.choices?.[0]?.message?.content || '')\n  .replace(/^```html?\\n?/, '').replace(/\\n?```$/, '').trim();\n\nconst angebotHtml = (angResp.choices?.[0]?.message?.content || '')\n  .replace(/^```html?\\n?/, '').replace(/\\n?```$/, '').trim();\n\nconst cssContent = (cssResp.choices?.[0]?.message?.content || '')\n  .replace(/^```css?\\n?/, '').replace(/\\n?```$/, '').trim();\n\nconst logoSection = d.hasLogo\n  ? (d.logoFacelift\n      ? '- logo.png           : Ihr bestehendes Logo\\n- logo-concept-1.jpg : Logo-Konzept 1 (KI-generiert)\\n- logo-concept-2.jpg : Logo-Konzept 2 (KI-generiert)\\n- logo-concept-3.jpg : Logo-Konzept 3 (KI-generiert)'\n      : '- logo.png           : Ihr Logo')\n  : (d.logoFacelift\n      ? '- logo-concept-1.jpg : Logo-Konzept 1 (KI-generiert)\\n- logo-concept-2.jpg : Logo-Konzept 2 (KI-generiert)\\n- logo-concept-3.jpg : Logo-Konzept 3 (KI-generiert)'\n      : '');\n\nconst now = new Date().toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' });\n\nconst readmeTxt = `DEMO-WEBSITE VORSCHAU\\n${\"=\".repeat(60)}\\n\\nUnternehmen : ${d.companyName}\\nBranche     : ${d.industry}\\nRegion      : ${d.region}\\nErstellt    : ${now}\\n\\nVorschau-URL:\\n${d.previewUrl}\\n\\n${\"=\".repeat(60)}\\nENTHALTENE DATEIEN\\n${\"=\".repeat(60)}\\n\\n- index.html         : Haupt-Demo-Seite\\n- angebot.html       : Angebotsseite (CTA)\\n- styles.css         : Stylesheet\\n- image-01.jpg bis image-10.jpg : KI-generierte Fotos\\n${logoSection}\\n\\n${\"=\".repeat(60)}\\nHANNAH'S WEBDESIGN\\n${\"=\".repeat(60)}\\n\\nDiese Demo wurde automatisch erstellt von:\\nHannah's Webdesign\\nhttps://www.hannahs-webdesign.de\\ninfo@hannahs-webdesign.de\\n\\nFuer das vollstandige Website-Paket:\\n-> ${d.previewUrl}angebot.html\\n`;\n\nreturn [{\n  json: {\n    ...d,\n    indexHtml,\n    angebotHtml,\n    cssContent,\n    readmeTxt\n  }\n}];"
+      }
+    },
+    {
+      "id": "node-create-index-binary",
+      "name": "index.html als Datei",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [5750, 260],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const d = $input.first().json;\nreturn [{\n  json: { slug: d.slug, filename: 'index.html' },\n  binary: {\n    data: {\n      data: Buffer.from(d.indexHtml || '<!DOCTYPE html><html><body><h1>Error</h1></body></html>', 'utf-8').toString('base64'),\n      mimeType: 'text/html',\n      fileName: 'index.html'\n    }\n  }\n}];"
+      }
+    },
+    {
+      "id": "node-sftp-index",
+      "name": "index.html hochladen",
+      "type": "n8n-nodes-base.sftp",
+      "typeVersion": 1,
+      "position": [6000, 260],
+      "parameters": {
+        "operation": "upload",
+        "path": "=/httpdocs/{{ $json.slug }}/index.html",
+        "binaryPropertyName": "data"
+      },
+      "credentials": {
+        "sftp": {
+          "id": "REPLACE_WITH_YOUR_STRATO_SFTP_CREDENTIAL_ID",
+          "name": "STRATO SFTP"
+        }
+      }
+    },
+    {
+      "id": "node-create-angebot-binary",
+      "name": "angebot.html als Datei",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [5750, 400],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const d = $('Dateien vorbereiten').first().json;\nreturn [{\n  json: { slug: d.slug, filename: 'angebot.html' },\n  binary: {\n    data: {\n      data: Buffer.from(d.angebotHtml || '<!DOCTYPE html><html><body><h1>Error</h1></body></html>', 'utf-8').toString('base64'),\n      mimeType: 'text/html',\n      fileName: 'angebot.html'\n    }\n  }\n}];"
+      }
+    },
+    {
+      "id": "node-sftp-angebot",
+      "name": "angebot.html hochladen",
+      "type": "n8n-nodes-base.sftp",
+      "typeVersion": 1,
+      "position": [6000, 400],
+      "parameters": {
+        "operation": "upload",
+        "path": "=/httpdocs/{{ $json.slug }}/angebot.html",
+        "binaryPropertyName": "data"
+      },
+      "credentials": {
+        "sftp": {
+          "id": "REPLACE_WITH_YOUR_STRATO_SFTP_CREDENTIAL_ID",
+          "name": "STRATO SFTP"
+        }
+      }
+    },
+    {
+      "id": "node-create-css-binary",
+      "name": "styles.css als Datei",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [5750, 540],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const d = $('Dateien vorbereiten').first().json;\nreturn [{\n  json: { slug: d.slug, filename: 'styles.css' },\n  binary: {\n    data: {\n      data: Buffer.from(d.cssContent || '/* Error */', 'utf-8').toString('base64'),\n      mimeType: 'text/css',\n      fileName: 'styles.css'\n    }\n  }\n}];"
+      }
+    },
+    {
+      "id": "node-sftp-css",
+      "name": "styles.css hochladen",
+      "type": "n8n-nodes-base.sftp",
+      "typeVersion": 1,
+      "position": [6000, 540],
+      "parameters": {
+        "operation": "upload",
+        "path": "=/httpdocs/{{ $json.slug }}/styles.css",
+        "binaryPropertyName": "data"
+      },
+      "credentials": {
+        "sftp": {
+          "id": "REPLACE_WITH_YOUR_STRATO_SFTP_CREDENTIAL_ID",
+          "name": "STRATO SFTP"
+        }
+      }
+    },
+    {
+      "id": "node-create-readme-binary",
+      "name": "README.txt als Datei",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [5750, 680],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const d = $('Dateien vorbereiten').first().json;\nreturn [{\n  json: { slug: d.slug, filename: 'README.txt' },\n  binary: {\n    data: {\n      data: Buffer.from(d.readmeTxt || 'README', 'utf-8').toString('base64'),\n      mimeType: 'text/plain',\n      fileName: 'README.txt'\n    }\n  }\n}];"
+      }
+    },
+    {
+      "id": "node-sftp-readme",
+      "name": "README.txt hochladen",
+      "type": "n8n-nodes-base.sftp",
+      "typeVersion": 1,
+      "position": [6000, 680],
+      "parameters": {
+        "operation": "upload",
+        "path": "=/httpdocs/{{ $json.slug }}/README.txt",
+        "binaryPropertyName": "data"
+      },
+      "credentials": {
+        "sftp": {
+          "id": "REPLACE_WITH_YOUR_STRATO_SFTP_CREDENTIAL_ID",
+          "name": "STRATO SFTP"
+        }
+      }
+    },
+    {
+      "id": "node-generate-outreach",
+      "name": "Akquise-Email generieren (Groq)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [6250, 400],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.groq.com/openai/v1/chat/completions",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.GROQ_API_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"llama-3.3-70b-versatile\",\n  \"temperature\": 0.8,\n  \"max_tokens\": 1000,\n  \"messages\": [\n    {\n      \"role\": \"system\",\n      \"content\": \"Du schreibst professionelle, personalisierte Akquise-E-Mails auf Deutsch. Dein Ton ist freundlich, professionell und direkt. Kein Spam-Feeling.\"\n    },\n    {\n      \"role\": \"user\",\n      \"content\": \"Schreibe eine kurze, personalisierte Akquise-E-Mail fuer folgende Situation:\\n\\nVon: Hannah's Webdesign (info@hannahs-webdesign.de)\\nAn: Geschaftsfuhrung von {{ $('Parse Email Data').first().json.companyName }}\\nBranche: {{ $('Parse Email Data').first().json.industry }}\\nRegion: {{ $('Parse Email Data').first().json.region }}\\nDemo-URL: {{ $('Parse Email Data').first().json.previewUrl }}\\n\\nInhalt:\\n1. Personalisierter Einstieg (Bezug auf Branche/Region)\\n2. Erklarung: Wir haben eine kostenlose, individuelle Website-Demo erstellt\\n3. Demo-Link prominent erwaehnen\\n4. Was der Kunde gewinnt (professionelle Prasenz, mehr Kunden)\\n5. Klarer CTA: Demo anschauen und bei Interesse melden\\n6. Kurze Signatur: Hannah's Webdesign\\n\\nFormat:\\nBetreff: [hier Betreff]\\n\\n[hier E-Mail-Text]\\n\\nMaximal 180 Worter. Kein Spam-Charakter. Auf Deutsch.\"\n    }\n  ]\n}",
+        "options": {
+          "timeout": 60000
+        }
+      }
+    },
+    {
+      "id": "node-send-summary",
+      "name": "Zusammenfassung per Email senden",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [6500, 400],
+      "parameters": {
+        "operation": "send",
+        "toList": "={{ $('Parse Email Data').first().json.fromEmail }}",
+        "subject": "=✅ Demo fertig: {{ $('Parse Email Data').first().json.companyName }} | {{ $('Parse Email Data').first().json.previewUrl }}",
+        "message": "=<h2>🎉 Demo-Website ist fertig!</h2>\n\n<p><strong>Unternehmen:</strong> {{ $('Parse Email Data').first().json.companyName }}<br>\n<strong>Branche:</strong> {{ $('Parse Email Data').first().json.industry }}<br>\n<strong>Region:</strong> {{ $('Parse Email Data').first().json.region }}</p>\n\n<h3>🔗 Vorschau-Link</h3>\n<p><a href=\"{{ $('Parse Email Data').first().json.previewUrl }}\" style=\"font-size:18px;font-weight:bold;\">{{ $('Parse Email Data').first().json.previewUrl }}</a></p>\n\n<h3>📦 Erstellt wurden:</h3>\n<ul>\n  <li>index.html – Professionelle Haupt-Demo-Seite</li>\n  <li>angebot.html – CTA-Angebotsseite</li>\n  <li>styles.css – Responsives Stylesheet</li>\n  <li>10x KI-generierte Bilder (Pollinations.ai)</li>\n  {{ $('Parse Email Data').first().json.hasLogo ? '<li>logo.png – Bestehendes Logo eingebunden</li>' : '' }}\n  {{ $('Parse Email Data').first().json.logoFacelift ? '<li>3x Logo-Konzepte (KI-generiert)</li>' : '' }}\n  <li>README.txt – Zusammenfassung</li>\n</ul>\n\n<h3>📧 Akquise-E-Mail (fertig zum Kopieren)</h3>\n<div style=\"background:#f5f5f5;padding:16px;border-left:4px solid #007bff;font-family:monospace;white-space:pre-wrap;\">{{ ($('Akquise-Email generieren (Groq)').first().json.choices?.[0]?.message?.content || 'Konnte nicht generiert werden') }}</div>\n\n<hr>\n<p style=\"color:#888;font-size:12px;\">Automatisch erstellt von n8n Workflow | Hannah's Webdesign</p>",
+        "options": {
+          "ccList": "",
+          "appendAttribution": false
+        }
+      },
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "REPLACE_WITH_YOUR_GMAIL_CREDENTIAL_ID",
+          "name": "Gmail Account"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Email Trigger (Gmail)": {
+      "main": [
+        [{ "node": "Parse Email Data", "type": "main", "index": 0 }]
+      ]
+    },
+    "Parse Email Data": {
+      "main": [
+        [{ "node": "Hat Website?", "type": "main", "index": 0 }]
+      ]
+    },
+    "Hat Website?": {
+      "main": [
+        [{ "node": "Website crawlen (Homepage)", "type": "main", "index": 0 }],
+        [{ "node": "Kein Website-Crawl (leer)", "type": "main", "index": 0 }]
+      ]
+    },
+    "Website crawlen (Homepage)": {
+      "main": [
+        [{ "node": "Content extrahieren", "type": "main", "index": 0 }]
+      ]
+    },
+    "Content extrahieren": {
+      "main": [
+        [{ "node": "Unterseiten crawlen", "type": "main", "index": 0 }]
+      ]
+    },
+    "Unterseiten crawlen": {
+      "main": [
+        [{ "node": "Unterseiten-Content zusammenführen", "type": "main", "index": 0 }]
+      ]
+    },
+    "Unterseiten-Content zusammenführen": {
+      "main": [
+        [{ "node": "Crawl-Daten mergen", "type": "main", "index": 0 }]
+      ]
+    },
+    "Kein Website-Crawl (leer)": {
+      "main": [
+        [{ "node": "Crawl-Daten mergen", "type": "main", "index": 1 }]
+      ]
+    },
+    "Crawl-Daten mergen": {
+      "main": [
+        [{ "node": "Index HTML generieren (Groq)", "type": "main", "index": 0 }]
+      ]
+    },
+    "Index HTML generieren (Groq)": {
+      "main": [
+        [{ "node": "Angebot HTML generieren (Groq)", "type": "main", "index": 0 }]
+      ]
+    },
+    "Angebot HTML generieren (Groq)": {
+      "main": [
+        [{ "node": "CSS generieren (Groq)", "type": "main", "index": 0 }]
+      ]
+    },
+    "CSS generieren (Groq)": {
+      "main": [
+        [{ "node": "Bild-Prompts erstellen", "type": "main", "index": 0 }]
+      ]
+    },
+    "Bild-Prompts erstellen": {
+      "main": [
+        [{ "node": "Bilder-Loop (10x)", "type": "main", "index": 0 }]
+      ]
+    },
+    "Bilder-Loop (10x)": {
+      "main": [
+        [{ "node": "Bild generieren (Pollinations.ai)", "type": "main", "index": 0 }],
+        [{ "node": "Hat Logo-URL?", "type": "main", "index": 0 }]
+      ]
+    },
+    "Bild generieren (Pollinations.ai)": {
+      "main": [
+        [{ "node": "Bild per SFTP hochladen", "type": "main", "index": 0 }]
+      ]
+    },
+    "Bild per SFTP hochladen": {
+      "main": [
+        [{ "node": "Bilder-Loop (10x)", "type": "main", "index": 0 }]
+      ]
+    },
+    "Hat Logo-URL?": {
+      "main": [
+        [{ "node": "Logo herunterladen", "type": "main", "index": 0 }],
+        [{ "node": "Logo-Facelift gewünscht?", "type": "main", "index": 0 }]
+      ]
+    },
+    "Logo herunterladen": {
+      "main": [
+        [{ "node": "Logo per SFTP hochladen", "type": "main", "index": 0 }]
+      ]
+    },
+    "Logo per SFTP hochladen": {
+      "main": [
+        [{ "node": "Logo-Facelift gewünscht?", "type": "main", "index": 0 }]
+      ]
+    },
+    "Logo-Facelift gewünscht?": {
+      "main": [
+        [
+          { "node": "Logo Konzept 1 generieren", "type": "main", "index": 0 },
+          { "node": "Logo Konzept 2 generieren", "type": "main", "index": 0 },
+          { "node": "Logo Konzept 3 generieren", "type": "main", "index": 0 }
+        ],
+        [{ "node": "Dateien vorbereiten", "type": "main", "index": 0 }]
+      ]
+    },
+    "Logo Konzept 1 generieren": {
+      "main": [
+        [{ "node": "Logo Konzept 1 hochladen", "type": "main", "index": 0 }]
+      ]
+    },
+    "Logo Konzept 1 hochladen": {
+      "main": [
+        [{ "node": "Dateien vorbereiten", "type": "main", "index": 0 }]
+      ]
+    },
+    "Logo Konzept 2 generieren": {
+      "main": [
+        [{ "node": "Logo Konzept 2 hochladen", "type": "main", "index": 0 }]
+      ]
+    },
+    "Logo Konzept 2 hochladen": {
+      "main": [
+        [{ "node": "Dateien vorbereiten", "type": "main", "index": 0 }]
+      ]
+    },
+    "Logo Konzept 3 generieren": {
+      "main": [
+        [{ "node": "Logo Konzept 3 hochladen", "type": "main", "index": 0 }]
+      ]
+    },
+    "Logo Konzept 3 hochladen": {
+      "main": [
+        [{ "node": "Dateien vorbereiten", "type": "main", "index": 0 }]
+      ]
+    },
+    "Dateien vorbereiten": {
+      "main": [
+        [
+          { "node": "index.html als Datei", "type": "main", "index": 0 },
+          { "node": "angebot.html als Datei", "type": "main", "index": 0 },
+          { "node": "styles.css als Datei", "type": "main", "index": 0 },
+          { "node": "README.txt als Datei", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "index.html als Datei": {
+      "main": [
+        [{ "node": "index.html hochladen", "type": "main", "index": 0 }]
+      ]
+    },
+    "angebot.html als Datei": {
+      "main": [
+        [{ "node": "angebot.html hochladen", "type": "main", "index": 0 }]
+      ]
+    },
+    "styles.css als Datei": {
+      "main": [
+        [{ "node": "styles.css hochladen", "type": "main", "index": 0 }]
+      ]
+    },
+    "README.txt als Datei": {
+      "main": [
+        [{ "node": "README.txt hochladen", "type": "main", "index": 0 }]
+      ]
+    },
+    "index.html hochladen": {
+      "main": [
+        [{ "node": "Akquise-Email generieren (Groq)", "type": "main", "index": 0 }]
+      ]
+    },
+    "angebot.html hochladen": {
+      "main": [
+        [{ "node": "Akquise-Email generieren (Groq)", "type": "main", "index": 0 }]
+      ]
+    },
+    "styles.css hochladen": {
+      "main": [
+        [{ "node": "Akquise-Email generieren (Groq)", "type": "main", "index": 0 }]
+      ]
+    },
+    "README.txt hochladen": {
+      "main": [
+        [{ "node": "Akquise-Email generieren (Groq)", "type": "main", "index": 0 }]
+      ]
+    },
+    "Akquise-Email generieren (Groq)": {
+      "main": [
+        [{ "node": "Zusammenfassung per Email senden", "type": "main", "index": 0 }]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "1",
+  "meta": {
+    "templateCredsSetupCompleted": false,
+    "instanceId": "hannahs-webdesign-demo-generator"
+  }
+}
