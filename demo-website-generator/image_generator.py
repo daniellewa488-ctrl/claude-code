@@ -5,7 +5,7 @@ from urllib.parse import quote
 from dataclasses import dataclass, field
 
 POLLINATIONS_BASE = "https://image.pollinations.ai/prompt"
-TIMEOUT = 60
+TIMEOUT = 90  # increased timeout for slower free model
 
 
 @dataclass
@@ -33,9 +33,17 @@ def _build_prompts(company: str, industry: str, region: str, style: str) -> list
 
 
 def _download(url: str) -> bytes:
-    resp = requests.get(url, timeout=TIMEOUT)
-    resp.raise_for_status()
-    return resp.content
+    for attempt in range(3):
+        try:
+            resp = requests.get(url, timeout=TIMEOUT)
+            resp.raise_for_status()
+            return resp.content
+        except Exception as e:
+            if attempt < 2:
+                print(f"[image_generator] Retrying after error: {e}")
+                time.sleep(5)
+            else:
+                raise
 
 
 def generate(data) -> GeneratedImages:
@@ -45,7 +53,7 @@ def generate(data) -> GeneratedImages:
     for i, prompt in enumerate(prompts, start=1):
         filename = f"image-{i:02d}.jpg"
         encoded = quote(prompt)
-        url = f"{POLLINATIONS_BASE}/{encoded}?width=1280&height=720&nologo=true&model=flux"
+        url = f"{POLLINATIONS_BASE}/{encoded}?width=1280&height=720&nologo=true&model=turbo"
         try:
             print(f"[image_generator] Generating {filename}...")
             img_bytes = _download(url)
@@ -71,7 +79,7 @@ def generate(data) -> GeneratedImages:
         ]
         for i, prompt in enumerate(logo_prompts, start=1):
             encoded = quote(prompt)
-            url = f"{POLLINATIONS_BASE}/{encoded}?width=1024&height=512&nologo=true&model=flux"
+            url = f"{POLLINATIONS_BASE}/{encoded}?width=1024&height=512&nologo=true&model=turbo"
             try:
                 print(f"[image_generator] Generating logo concept {i}...")
                 logo_bytes = _download(url)
