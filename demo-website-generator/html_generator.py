@@ -65,14 +65,14 @@ Erstelle eine vollständige, professionelle und moderne index.html für folgende
 
 Anforderungen:
 - Vollständige HTML5-Seite mit <head> (charset, viewport, title, link zu styles.css, Google Fonts)
-- Navigationsleiste mit Links zu: Startseite (index.html), Angebot (angebot.html), Über uns, Leistungen, Kontakt
-- Hero-Bereich mit großem Hintergrundbild (image-01.jpg), Firmennamen als H1, Slogan, CTA-Button zu angebot.html
-- Über-uns-Bereich mit Text passend zur Branche und Region
-- Leistungen-Bereich mit 4-6 Karten, jede mit Bild (image-02.jpg bis image-06.jpg)
+- Navigationsleiste mit den Links: Startseite, Über uns, Leistungen, Galerie, Kontakt
+  WICHTIG: ALLE Navigationslinks müssen zu angebot.html verlinken (href="angebot.html") – keine Anker-Links (#)
+- Hero-Bereich mit großem Hintergrundbild (image-01.jpg), Firmennamen als H1, Slogan, großer CTA-Button "Mehr erfahren" → angebot.html
+- Über-uns-Bereich mit Text passend zur Branche und Region, CTA-Button → angebot.html
+- Leistungen-Bereich mit 4-6 Karten, jede mit Bild (image-02.jpg bis image-06.jpg), CTA-Button unter dem Bereich → angebot.html
 - Galerie-Bereich mit image-07.jpg und image-08.jpg
 - Testimonials-Bereich mit 2 fiktiven Kundenbewertungen (passend zur Zielgruppe)
-- Kontaktbereich mit fiktiver Adresse in {data.region}, Telefon, E-Mail
-- Footer mit Copyright
+- Footer mit Copyright und Link → angebot.html
 - Alle Bildpfade relativ (z.B. image-01.jpg, nicht /image-01.jpg)
 - Wenn eine logo.png vorhanden ist, zeige sie in der Navigation
 - Sprache: Deutsch
@@ -82,20 +82,19 @@ Anforderungen:
 
     # --- angebot.html ---
     angebot_prompt = f"""
-Erstelle eine vollständige angebot.html für "Hannah's Webdesign" (Webdesign-Dienstleisterin).
+Erstelle eine einfache, fokussierte angebot.html für "Hannah's Webdesign".
 
-Kontext: Diese Seite wird als Demo für potenzielle Kunden erstellt. Der Besucher (= {data.company_name}) soll
-von Hannah's Webdesign-Angebot überzeugt werden.
+Kontext: Der Besucher ({data.company_name}) hat gerade die Demo-Website gesehen und soll jetzt zur Kontaktaufnahme bewegt werden.
 
 Anforderungen:
 - Vollständige HTML5-Seite mit <head> (charset, viewport, title, link zu styles.css, Google Fonts)
-- Navigation mit Link zurück zu index.html
-- Hero: "Gefällt Ihnen diese Demo-Website?" mit kurzem erklärendem Text
-- Abschnitt: Was Hannah's Webdesign bietet (responsive Design, SEO, schnelle Ladezeiten, etc.)
-- Pakete-Überblick: Starter (ab 599 €), Business (ab 999 €), Premium (auf Anfrage) – kurze Beschreibung pro Paket
-- Personalisierter CTA-Abschnitt: Direkt angesprochen an {data.company_name} in der Branche {data.industry}
-- Kontakt-CTA: großer Button "Jetzt kostenlos beraten lassen" mit mailto:hallo@hannahs-webdesign.de
-- Footer mit Copyright Hannah's Webdesign
+- Kleines Logo/Name "Hannah's Webdesign" oben links, daneben Link "← Zurück zur Demo" → index.html
+- Großer zentrierter Hero-Text: "Gefällt Ihnen diese Website?" mit Unterzeile: "Wir erstellen Ihre komplette Website – professionell, schnell und zu fairen Preisen."
+- Kurzer persönlicher Absatz: direkt an {data.company_name} gerichtet, Bezug auf {data.industry} in {data.region}
+- Großer, auffälliger CTA-Button: "Jetzt kostenlos anfragen" → mailto:hallo@hannahs-webdesign.de
+- Darunter kurz: Telefonnummer (fiktiv), E-Mail hallo@hannahs-webdesign.de
+- Footer: Copyright Hannah's Webdesign
+- Keine Pakete, keine Preislisten – nur die klare Botschaft und den Kontakt-Button
 - Sprache: Deutsch
 """.strip()
 
