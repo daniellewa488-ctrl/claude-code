@@ -48,14 +48,19 @@ def _call_groq(system_prompt: str, user_prompt: str) -> str:
 
 
 def _context_block(data, crawled: str) -> str:
+    region = data.region or "aus dem gecrawlten Inhalt ableiten"
+    services = data.services or "aus dem gecrawlten Inhalt ableiten"
+    target = data.target_audience or "aus dem gecrawlten Inhalt ableiten"
+    style = data.style or "professionell, modern, passend zur Branche"
     return f"""
 Unternehmensname: {data.company_name}
 Branche: {data.industry}
-Region: {data.region}
-Leistungen: {data.services}
-Zielgruppe: {data.target_audience}
-Stil/Design: {data.style}
+Region: {region}
+Leistungen: {services}
+Zielgruppe: {target}
+Stil/Design: {style}
 Vorhandene Website gecrawlt: {crawled[:3000] if crawled else 'Keine Website vorhanden'}
+HINWEIS: Felder mit "aus dem gecrawlten Inhalt ableiten" bitte aus dem gecrawlten Inhalt oder der Branche intelligent befüllen.
 """.strip()
 
 

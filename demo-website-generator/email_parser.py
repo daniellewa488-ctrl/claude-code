@@ -51,21 +51,37 @@ def parse(email_data: dict) -> JobData:
     body = email_data.get("body", "")
     raw_sender = email_data.get("sender", "")
 
-    company = _extract(body, "Unternehmensname", "Firma", "Company")
+    # Support both old format (Unternehmensname) and new format (Firmenname)
+    company = _extract(body, "Firmenname", "Unternehmensname", "Firma", "Company")
     industry = _extract(body, "Branche", "Industrie", "Industry")
-    website = _extract(body, "Website", "Webseite", "URL")
-    logo = _extract(body, "Logo")
-    facelift_raw = _extract(body, "Logo-Facelift", "LogoFacelift", "Facelift")
-    region = _extract(body, "Region", "Standort", "Ort")
-    services = _extract(body, "Leistungen", "Services", "Angebote")
-    target = _extract(body, "Zielgruppe", "Zielkunden", "Target")
-    style = _extract(body, "Stil", "Style", "Design")
+
+    # Support both: "Aktuelle Domain: url" and "Website: url"
+    website = _extract(body, "Aktuelle Domain", "Domain", "Website", "Webseite", "URL")
+
+    # Support "Website vorhanden: Nein" to explicitly disable crawling
+    website_vorhanden = _extract(body, "Website vorhanden")
+    if website_vorhanden.lower() in ("nein", "no", "false", "0"):
+        website = ""
 
     # Normalize website: treat "keine", "nein", "-", empty as no URL
     if website.lower() in ("keine", "nein", "-", "n/a", ""):
         website = ""
 
+    # Logo: support direct URL or "Logo vorhanden: Ja/Nein"
+    logo = _extract(body, "Logo URL", "Logo-URL", "Logo")
+    logo_vorhanden = _extract(body, "Logo vorhanden")
+    # Only use logo as URL if it actually starts with http
+    logo_url = logo if logo.startswith("http") else ""
+
+    # Facelift: support "Logo-Facelift gewünscht" and "Logo-Facelift"
+    facelift_raw = _extract(body, "Logo-Facelift gewünscht", "Logo-Facelift", "LogoFacelift", "Facelift")
     facelift = facelift_raw.lower() in ("ja", "yes", "true", "1")
+
+    # Optional detail fields — left empty if not provided, Groq will infer from crawled site
+    region = _extract(body, "Region", "Standort", "Ort", "Stadt")
+    services = _extract(body, "Leistungen", "Services", "Angebote")
+    target = _extract(body, "Zielgruppe", "Zielkunden", "Target")
+    style = _extract(body, "Stil", "Style", "Design", "Wunschdesign")
 
     slug = _slugify(company) if company else "demo"
 
@@ -74,7 +90,7 @@ def parse(email_data: dict) -> JobData:
         slug=slug,
         industry=industry,
         website_url=website,
-        logo_url=logo if logo.startswith("http") else "",
+        logo_url=logo_url,
         logo_facelift=facelift,
         region=region,
         services=services,
