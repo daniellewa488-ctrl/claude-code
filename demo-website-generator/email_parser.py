@@ -1,5 +1,10 @@
 import re
-from dataclasses import dataclass, field
+import json
+import requests
+from dataclasses import dataclass
+
+GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
+MODEL = "llama-3.3-70b-versatile"
 
 
 @dataclass
@@ -30,16 +35,6 @@ def _slugify(text: str) -> str:
     return text
 
 
-def _extract(body: str, *keys: str) -> str:
-    """Try each key variant (case-insensitive) and return the first match."""
-    for key in keys:
-        pattern = rf"(?im)^{re.escape(key)}\s*:\s*(.+)$"
-        m = re.search(pattern, body)
-        if m:
-            return m.group(1).strip()
-    return ""
-
-
 def _extract_sender_address(raw_from: str) -> str:
     m = re.search(r"<([^>]+)>", raw_from)
     if m:
@@ -47,55 +42,99 @@ def _extract_sender_address(raw_from: str) -> str:
     return raw_from.strip()
 
 
+def _parse_with_groq(body: str, api_key: str) -> dict:
+    system_prompt = (
+        "You are a data extraction assistant. Extract information from the email body and return ONLY a valid JSON object. "
+        "No explanation, no markdown, just the raw JSON."
+    )
+    user_prompt = f"""Extract the following fields from this email body. Return a JSON object with exactly these keys:
+- company_name: the business/company name (string)
+- industry: the business industry or type (string)
+- website_url: the website URL if mentioned, empty string if not (string, must start with http if present)
+- logo_url: a direct URL to a logo image if mentioned, empty string if not available (string)
+- logo_facelift: whether a logo redesign/facelift is requested (boolean true/false)
+- region: city, region or location of the business (string, empty if not mentioned)
+- services: list of services or offerings as a comma-separated string (string, empty if not mentioned)
+- target_audience: who their customers are (string, empty if not mentioned)
+- style: design style preferences like colors, mood, aesthetic (string, empty if not mentioned)
+
+Email body:
+{body}
+
+Return ONLY the JSON object, nothing else."""
+
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+    }
+    payload = {
+        "model": MODEL,
+        "messages": [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ],
+        "max_tokens": 1000,
+        "temperature": 0,
+    }
+
+    for attempt in range(5):
+        resp = requests.post(GROQ_URL, json=payload, headers=headers, timeout=60)
+        if resp.status_code == 429:
+            import time
+            wait = 10 * (attempt + 1)
+            print(f"[email_parser] Groq rate limit, waiting {wait}s...")
+            time.sleep(wait)
+            continue
+        resp.raise_for_status()
+        content = resp.json()["choices"][0]["message"]["content"].strip()
+        # Strip markdown fences if present
+        content = re.sub(r"^```[a-z]*\n?", "", content)
+        content = re.sub(r"\n?```$", "", content).strip()
+        return json.loads(content)
+
+    raise Exception("Groq API failed after 5 retries")
+
+
 def parse(email_data: dict) -> JobData:
+    import config
     body = email_data.get("body", "")
     raw_sender = email_data.get("sender", "")
 
-    # Support both old format (Unternehmensname) and new format (Firmenname)
-    company = _extract(body, "Firmenname", "Unternehmensname", "Firma", "Company")
-    industry = _extract(body, "Branche", "Industrie", "Industry")
+    print("[email_parser] Using Groq to parse email fields...")
+    extracted = _parse_with_groq(body, config.GROQ_API_KEY)
 
-    # Support both: "Aktuelle Domain: url" and "Website: url"
-    website = _extract(body, "Aktuelle Domain", "Domain", "Website", "Webseite", "URL")
+    company = extracted.get("company_name", "").strip()
+    industry = extracted.get("industry", "").strip()
+    website = extracted.get("website_url", "").strip()
+    logo_url = extracted.get("logo_url", "").strip()
+    logo_facelift = bool(extracted.get("logo_facelift", False))
+    region = extracted.get("region", "").strip()
+    services = extracted.get("services", "").strip()
+    target = extracted.get("target_audience", "").strip()
+    style = extracted.get("style", "").strip()
 
-    # Support "Website vorhanden: Nein" to explicitly disable crawling
-    website_vorhanden = _extract(body, "Website vorhanden")
-    if website_vorhanden.lower() in ("nein", "no", "false", "0"):
+    # Validate website URL
+    if not website.startswith("http"):
         website = ""
 
-    # Normalize website: treat "keine", "nein", "-", empty as no URL
-    if website.lower() in ("keine", "nein", "-", "n/a", ""):
-        website = ""
-
-    # Logo: support direct URL or "Logo vorhanden: Ja/Nein"
-    logo = _extract(body, "Logo URL", "Logo-URL", "Logo")
-    logo_vorhanden = _extract(body, "Logo vorhanden")
-    # Only use logo as URL if it actually starts with http
-    logo_url = logo if logo.startswith("http") else ""
-
-    # Facelift: support "Logo-Facelift gewünscht" and "Logo-Facelift"
-    facelift_raw = _extract(body, "Logo-Facelift gewünscht", "Logo-Facelift", "LogoFacelift", "Facelift")
-    facelift = facelift_raw.lower() in ("ja", "yes", "true", "1")
-
-    # Optional detail fields — left empty if not provided, Groq will infer from crawled site
-    region = _extract(body, "Region", "Standort", "Ort", "Stadt")
-    services = _extract(body, "Leistungen", "Services", "Angebote")
-    target = _extract(body, "Zielgruppe", "Zielkunden", "Target")
-    style = _extract(body, "Stil", "Style", "Design", "Wunschdesign")
+    # Validate logo URL
+    if not logo_url.startswith("http"):
+        logo_url = ""
 
     slug = _slugify(company) if company else "demo"
 
-    data = JobData(
+    print(f"[email_parser] Extracted: company='{company}', industry='{industry}', website='{website}', facelift={logo_facelift}")
+
+    return JobData(
         company_name=company,
         slug=slug,
         industry=industry,
         website_url=website,
         logo_url=logo_url,
-        logo_facelift=facelift,
+        logo_facelift=logo_facelift,
         region=region,
         services=services,
         target_audience=target,
         style=style,
         sender_email=_extract_sender_address(raw_sender),
     )
-    return data
