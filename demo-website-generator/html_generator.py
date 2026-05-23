@@ -16,6 +16,7 @@ class GeneratedSite:
 
 
 def _call_groq(system_prompt: str, user_prompt: str) -> str:
+    import time
     headers = {
         "Authorization": f"Bearer {config.GROQ_API_KEY}",
         "Content-Type": "application/json",
@@ -29,13 +30,21 @@ def _call_groq(system_prompt: str, user_prompt: str) -> str:
         "max_tokens": 8000,
         "temperature": 0.7,
     }
-    resp = requests.post(GROQ_URL, json=payload, headers=headers, timeout=120)
-    resp.raise_for_status()
-    content = resp.json()["choices"][0]["message"]["content"]
-    # Strip any accidental markdown fences
-    content = re.sub(r"^```[a-z]*\n?", "", content.strip())
-    content = re.sub(r"\n?```$", "", content.strip())
-    return content.strip()
+    for attempt in range(5):
+        resp = requests.post(GROQ_URL, json=payload, headers=headers, timeout=120)
+        if resp.status_code == 429:
+            wait = 10 * (attempt + 1)
+            print(f"[html_generator] Groq rate limit hit, waiting {wait}s before retry...")
+            time.sleep(wait)
+            continue
+        resp.raise_for_status()
+        content = resp.json()["choices"][0]["message"]["content"]
+        # Strip any accidental markdown fences
+        content = re.sub(r"^```[a-z]*\n?", "", content.strip())
+        content = re.sub(r"\n?```$", "", content.strip())
+        time.sleep(4)  # pause between consecutive Groq calls
+        return content.strip()
+    raise Exception("Groq API returned 429 after 5 retries")
 
 
 def _context_block(data, crawled: str) -> str:
