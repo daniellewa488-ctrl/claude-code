@@ -1,36 +1,37 @@
 import io
-import stat
-import paramiko
+import ftplib
 import config
 
 
-def _mkdir_p(sftp, remote_path: str):
+def _mkdir_p(ftp, remote_path: str):
     """Create remote directory tree, ignoring if exists."""
-    parts = remote_path.replace("\\", "/").split("/")
+    parts = [p for p in remote_path.replace("\\", "/").split("/") if p]
     current = ""
     for part in parts:
-        if not part:
-            continue
         current += f"/{part}"
         try:
-            sftp.stat(current)
-        except FileNotFoundError:
-            sftp.mkdir(current)
+            ftp.mkd(current)
+        except ftplib.error_perm:
+            pass  # directory already exists
 
 
 def upload(slug: str, site, images) -> str:
     """
-    Upload all generated files to STRATO under {SFTP_ROOT}/{slug}/.
+    Upload all generated files to STRATO under {SFTP_ROOT}/{slug}/
+    using FTP over TLS (FTPS) on port 21.
     Returns the remote directory path.
     """
     remote_dir = f"{config.STRATO_SFTP_ROOT}/{slug}"
 
-    transport = paramiko.Transport((config.STRATO_SFTP_HOST, 22))
-    transport.connect(username=config.STRATO_SFTP_USER, password=config.STRATO_SFTP_PASS)
-    sftp = paramiko.SFTPClient.from_transport(transport)
+    ftp = ftplib.FTP_TLS()
+    ftp.connect(config.STRATO_SFTP_HOST, 21, timeout=30)
+    ftp.login(config.STRATO_SFTP_USER, config.STRATO_SFTP_PASS)
+    ftp.prot_p()  # enable encrypted data channel
+    ftp.set_pasv(True)
 
     try:
-        _mkdir_p(sftp, remote_dir)
+        _mkdir_p(ftp, remote_dir)
+        ftp.cwd(remote_dir)
 
         # Upload text files
         text_files = {
@@ -39,29 +40,29 @@ def upload(slug: str, site, images) -> str:
             "styles.css": site.styles_css,
         }
         for name, content in text_files.items():
-            remote_path = f"{remote_dir}/{name}"
             data = content.encode("utf-8")
-            sftp.putfo(io.BytesIO(data), remote_path)
-            print(f"[sftp_uploader] Uploaded {name}")
+            ftp.storbinary(f"STOR {name}", io.BytesIO(data))
+            print(f"[ftp_uploader] Uploaded {name}")
 
         # Upload images
         for filename, img_bytes in images.images.items():
-            remote_path = f"{remote_dir}/{filename}"
-            sftp.putfo(io.BytesIO(img_bytes), remote_path)
-            print(f"[sftp_uploader] Uploaded {filename}")
+            ftp.storbinary(f"STOR {filename}", io.BytesIO(img_bytes))
+            print(f"[ftp_uploader] Uploaded {filename}")
 
         # Upload logo
         if images.logo_bytes:
-            sftp.putfo(io.BytesIO(images.logo_bytes), f"{remote_dir}/logo.png")
-            print("[sftp_uploader] Uploaded logo.png")
+            ftp.storbinary("STOR logo.png", io.BytesIO(images.logo_bytes))
+            print("[ftp_uploader] Uploaded logo.png")
 
         # Upload logo concepts
         for name, logo_bytes in images.logo_concepts:
-            sftp.putfo(io.BytesIO(logo_bytes), f"{remote_dir}/{name}")
-            print(f"[sftp_uploader] Uploaded {name}")
+            ftp.storbinary(f"STOR {name}", io.BytesIO(logo_bytes))
+            print(f"[ftp_uploader] Uploaded {name}")
 
     finally:
-        sftp.close()
-        transport.close()
+        try:
+            ftp.quit()
+        except Exception:
+            ftp.close()
 
     return remote_dir
