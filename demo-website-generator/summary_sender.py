@@ -37,6 +37,13 @@ def send(data, site, images) -> None:
 
   <a href="{preview_url}" class="preview-btn">🌐 Demo ansehen</a>
 
+  <h2>Upload-Pfad (zur Diagnose)</h2>
+  <p style="font-family:monospace;background:#f5f5f5;padding:8px;border-radius:4px">
+    SFTP-Root: <b>{config.STRATO_SFTP_ROOT}</b><br>
+    Ordner auf Server: <b>{config.STRATO_SFTP_ROOT}/{data.slug}/</b><br>
+    Vorschau-URL: <b>{preview_url}</b>
+  </p>
+
   <h2>Hochgeladene Dateien</h2>
   <ul>{_file_list(site, images)}</ul>
 
