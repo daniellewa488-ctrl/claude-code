@@ -5,13 +5,13 @@ load_dotenv()
 
 # IMAP (incoming email)
 IMAP_HOST = os.environ["IMAP_HOST"]
-IMAP_PORT = int(os.getenv("IMAP_PORT", "993"))
+IMAP_PORT = int(os.getenv("IMAP_PORT") or "993")
 IMAP_USER = os.environ["IMAP_USER"]
 IMAP_PASS = os.environ["IMAP_PASS"]
 
 # SMTP (outgoing email)
 SMTP_HOST = os.environ["SMTP_HOST"]
-SMTP_PORT = int(os.getenv("SMTP_PORT", "465"))
+SMTP_PORT = int(os.getenv("SMTP_PORT") or "465")
 SMTP_USER = os.environ["SMTP_USER"]
 SMTP_PASS = os.environ["SMTP_PASS"]
 
@@ -28,4 +28,4 @@ STRATO_SFTP_ROOT = os.getenv("STRATO_SFTP_ROOT", "/httpdocs")
 PREVIEW_BASE_URL = os.getenv("PREVIEW_BASE_URL", "https://www.hannahs-webdesign.de")
 
 # Polling interval
-POLL_INTERVAL_SECONDS = int(os.getenv("POLL_INTERVAL_SECONDS", "120"))
+POLL_INTERVAL_SECONDS = int(os.getenv("POLL_INTERVAL_SECONDS") or "120")
