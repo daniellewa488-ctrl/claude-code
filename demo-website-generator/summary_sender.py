@@ -57,6 +57,6 @@ def send(data, site, images) -> None:
     ctx = ssl.create_default_context()
     with smtplib.SMTP_SSL(config.SMTP_HOST, config.SMTP_PORT, context=ctx) as server:
         server.login(config.SMTP_USER, config.SMTP_PASS)
-        server.sendmail(config.SMTP_USER, data.sender_email, msg.as_bytes())
+        server.send_message(msg)
 
     print(f"[summary_sender] Summary email sent to {data.sender_email}")
