@@ -34,6 +34,7 @@ def upload(slug: str, site, images) -> str:
             "index.html": site.index_html,
             "angebot.html": site.angebot_html,
             "styles.css": site.styles_css,
+            ".htaccess": "RewriteEngine Off\nOptions -Indexes\n",
         }
         for name, content in text_files.items():
             sftp.putfo(io.BytesIO(content.encode("utf-8")), f"{remote_dir}/{name}")
