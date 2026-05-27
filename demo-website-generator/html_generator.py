@@ -26,7 +26,35 @@ INDUSTRY_COLORS = {
 }
 
 
-def _get_colors(industry: str, style: str) -> tuple:
+def _parse_json_safe(raw: str) -> dict:
+    """Try multiple strategies to extract valid JSON from Groq response."""
+    # Strategy 1: direct parse
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError:
+        pass
+
+    # Strategy 2: extract first {...} block
+    try:
+        m = re.search(r'\{[\s\S]*\}', raw)
+        if m:
+            return json.loads(m.group(0))
+    except json.JSONDecodeError:
+        pass
+
+    # Strategy 3: fix common issues (trailing commas, smart quotes)
+    try:
+        fixed = re.sub(r',\s*}', '}', raw)
+        fixed = re.sub(r',\s*]', ']', fixed)
+        fixed = fixed.replace('‘', "'").replace('’', "'")
+        fixed = fixed.replace('“', '"').replace('”', '"')
+        m = re.search(r'\{[\s\S]*\}', fixed)
+        if m:
+            return json.loads(m.group(0))
+    except json.JSONDecodeError:
+        pass
+
+    raise ValueError(f"Could not parse JSON from Groq response: {raw[:200]}")
     text = (industry + " " + style).lower()
     for key, colors in INDUSTRY_COLORS.items():
         if key in text:
@@ -34,7 +62,7 @@ def _get_colors(industry: str, style: str) -> tuple:
     return ("blue", "#1d4ed8", "#2563eb")
 
 
-def _call_groq(system_prompt: str, user_prompt: str, max_tokens: int = 2000) -> str:
+def _call_groq(system_prompt: str, user_prompt: str, max_tokens: int = 2000, temperature: float = 0.7) -> str:
     import time
     headers = {
         "Authorization": f"Bearer {config.GROQ_API_KEY}",
@@ -47,7 +75,7 @@ def _call_groq(system_prompt: str, user_prompt: str, max_tokens: int = 2000) -> 
             {"role": "user", "content": user_prompt},
         ],
         "max_tokens": max_tokens,
-        "temperature": 0.7,
+        "temperature": temperature,
     }
     for attempt in range(5):
         resp = requests.post(GROQ_URL, json=payload, headers=headers, timeout=120)
@@ -98,8 +126,15 @@ Return this JSON structure (all text in German):
   "email": "realistic email for the company"
 }}"""
 
-    raw = _call_groq(system, prompt, max_tokens=1500)
-    return json.loads(raw)
+    for attempt in range(3):
+        try:
+            raw = _call_groq(system, prompt, max_tokens=1500, temperature=0)
+            return _parse_json_safe(raw)
+        except (ValueError, json.JSONDecodeError) as e:
+            print(f"[html_generator] JSON parse failed (attempt {attempt+1}): {e}")
+            if attempt == 2:
+                raise
+    raise Exception("Failed to get valid JSON from Groq after 3 attempts")
 
 
 def _build_service_cards(services: list) -> str:
