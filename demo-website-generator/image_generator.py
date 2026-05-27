@@ -17,23 +17,21 @@ class GeneratedImages:
 
 
 def _build_prompts(company: str, industry: str, region: str, style: str) -> list:
-    # Safe defaults so prompts are always meaningful
     company = company or "professional business"
     industry = industry or "professional services"
     region = region or "Germany"
-    base = f"{industry} business {region}"
     style_hint = style if style else "professional modern clean"
     return [
-        f"hero banner {base}, {style_hint}, wide angle, no text, photorealistic",
-        f"team of professionals {base}, {style_hint}, office, smiling, no text",
-        f"service detail {base}, close-up, high quality, {style_hint}, no text",
-        f"happy customer {base}, satisfied client, {style_hint}, no text",
-        f"modern workspace {base}, {style_hint}, interior, bright, no text",
-        f"professional equipment tools {base}, {style_hint}, no text",
-        f"aerial cityscape {region} Germany, beautiful, golden hour, no text",
-        f"finished result {base}, before after quality, {style_hint}, no text",
-        f"collaboration meeting {base}, {style_hint}, conference room, no text",
-        f"abstract concept {industry}, modern, {style_hint}, minimal, no text",
+        f"{industry} exterior building signage, {region}, {style_hint}, wide angle, photorealistic, no text",
+        f"employees workers at {industry} {region}, on the job, {style_hint}, natural light, no text, photorealistic",
+        f"close-up detail {industry} work craftsmanship, high quality, {style_hint}, no text, photorealistic",
+        f"happy satisfied customer with {industry} results, genuine smile, {style_hint}, no text, photorealistic",
+        f"{industry} work in progress, professional, {style_hint}, detailed, no text, photorealistic",
+        f"tools equipment materials for {industry}, professional arrangement, {style_hint}, no text, photorealistic",
+        f"{region} Germany scenery landscape, beautiful, golden hour, cinematic, no text, photorealistic",
+        f"impressive finished result of {industry} project, before after quality, {style_hint}, no text",
+        f"team consultation {industry} client meeting, {style_hint}, professional, no text, photorealistic",
+        f"{industry} product service showcase, studio quality, {style_hint}, clean background, no text",
     ]
 
 

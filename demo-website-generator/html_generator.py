@@ -303,10 +303,9 @@ def _build_service_cards(services: list, primary: str) -> str:
     cards = []
     for i, svc in enumerate(services[:6]):
         img = images[i % len(images)]
-        cards.append(f"""        <div class="group bg-white rounded-2xl overflow-hidden shadow-md border border-gray-100 hover:-translate-y-2 hover:shadow-2xl transition-all duration-300">
-          <div class="overflow-hidden relative" style="aspect-ratio:4/3">
-            <img src="{img}" alt="{svc['name']}" class="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-500">
-            <div class="absolute inset-0 bg-gradient-to-t from-black/30 to-transparent"></div>
+        cards.append(f"""        <div class="group bg-white rounded-2xl overflow-hidden shadow-md border border-gray-100 hover:-translate-y-1 hover:shadow-xl transition-all duration-300">
+          <div class="h-48 overflow-hidden">
+            <img src="{img}" alt="{svc['name']}" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500">
           </div>
           <div class="p-6">
             <h3 class="font-display text-xl font-bold text-gray-900 mb-2">{svc['name']}</h3>
@@ -593,21 +592,14 @@ def _build_index_html(data, content: dict, primary: str, primary_dark: str) -> s
         <p class="label mb-4">Unsere Arbeit</p>
         <h2 class="text-4xl md:text-5xl font-bold text-gray-900">Einblicke in unsere Projekte</h2>
       </div>
-      <!-- Asymmetric grid -->
-      <div class="grid grid-cols-12 gap-4">
-        <div class="col-span-12 md:col-span-8">
-          <img src="image-07.jpg" alt="Projekt" class="w-full h-56 md:h-72 object-cover rounded-2xl shadow-md hover:shadow-xl transition-shadow duration-300">
-        </div>
-        <div class="col-span-12 md:col-span-4 flex flex-col gap-4">
-          <img src="image-08.jpg" alt="Projekt" class="w-full object-cover rounded-2xl shadow-md hover:shadow-xl transition-shadow duration-300 h-24 md:h-[136px]">
-          <img src="image-10.jpg" alt="Projekt" class="w-full object-cover rounded-2xl shadow-md hover:shadow-xl transition-shadow duration-300 h-24 md:h-[136px]">
-        </div>
-        <div class="col-span-12 md:col-span-5">
-          <img src="image-09.jpg" alt="Projekt" class="w-full h-48 md:h-56 object-cover rounded-2xl shadow-md hover:shadow-xl transition-shadow duration-300">
-        </div>
-        <div class="col-span-12 md:col-span-7">
-          <img src="image-05.jpg" alt="Projekt" class="w-full h-48 md:h-56 object-cover rounded-2xl shadow-md hover:shadow-xl transition-shadow duration-300">
-        </div>
+      <!-- Uniform gallery grid: 2 columns on mobile, 3 on desktop -->
+      <div class="grid grid-cols-2 md:grid-cols-3 gap-4">
+        <img src="image-07.jpg" alt="Projekt" class="w-full h-44 md:h-52 object-cover rounded-2xl shadow-sm hover:shadow-md hover:scale-[1.02] transition-all duration-300">
+        <img src="image-08.jpg" alt="Projekt" class="w-full h-44 md:h-52 object-cover rounded-2xl shadow-sm hover:shadow-md hover:scale-[1.02] transition-all duration-300">
+        <img src="image-09.jpg" alt="Projekt" class="w-full h-44 md:h-52 object-cover rounded-2xl shadow-sm hover:shadow-md hover:scale-[1.02] transition-all duration-300 hidden md:block">
+        <img src="image-05.jpg" alt="Projekt" class="w-full h-44 md:h-52 object-cover rounded-2xl shadow-sm hover:shadow-md hover:scale-[1.02] transition-all duration-300">
+        <img src="image-10.jpg" alt="Projekt" class="w-full h-44 md:h-52 object-cover rounded-2xl shadow-sm hover:shadow-md hover:scale-[1.02] transition-all duration-300">
+        <img src="image-03.jpg" alt="Projekt" class="w-full h-44 md:h-52 object-cover rounded-2xl shadow-sm hover:shadow-md hover:scale-[1.02] transition-all duration-300 hidden md:block">
       </div>
     </div>
   </section>
