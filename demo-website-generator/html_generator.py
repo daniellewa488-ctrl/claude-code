@@ -45,6 +45,24 @@ def _get_initials(name: str) -> str:
     return name[:2].upper()
 
 
+def _choose_variant(industry: str, style: str) -> str:
+    """Choose one of three distinct layout/feel variants based on industry and style."""
+    text = (industry + " " + style).lower()
+    elegant_keys = ["beauty", "spa", "wellness", "hotel", "café", "cafe", "friseur",
+                    "hochzeit", "blumen", "mode", "schmuck", "kosmetik", "luxus",
+                    "restaurant", "bäckerei", "konditorei", "massage"]
+    bold_keys = ["it", "tech", "software", "bau", "handwerk", "elektro", "sanitär",
+                 "reinigung", "auto", "logistik", "industrie", "sicherheit", "dach",
+                 "garten", "landschaft", "maler", "gerüst", "transport", "lager"]
+    for k in elegant_keys:
+        if k in text:
+            return "elegant"
+    for k in bold_keys:
+        if k in text:
+            return "bold"
+    return "classic"
+
+
 def _parse_json_safe(raw: str) -> dict:
     try:
         return json.loads(raw)
@@ -241,14 +259,16 @@ def _star_svg(color: str) -> str:
     )
 
 
-def _build_stats_html(stats: list) -> str:
+def _build_stats_html(stats: list, variant: str = "classic") -> str:
+    lbl_cls = "text-white/60" if variant in ("elegant", "bold") else "text-gray-400"
+    bdr_cls = "border-r border-white/20" if variant in ("elegant", "bold") else "border-r border-gray-700"
     items = []
     for i, s in enumerate(stats[:3]):
-        border = "" if i == len(stats[:3]) - 1 else "border-r border-gray-700"
+        border = "" if i == len(stats[:3]) - 1 else bdr_cls
         items.append(f"""
       <div class="{border} px-4">
         <p class="font-display text-4xl md:text-5xl font-black text-white">{s['number']}</p>
-        <p class="text-gray-400 text-xs mt-2 uppercase tracking-widest">{s['label']}</p>
+        <p class="{lbl_cls} text-xs mt-2 uppercase tracking-widest">{s['label']}</p>
       </div>""")
     return "\n".join(items)
 
@@ -284,8 +304,8 @@ def _build_service_cards(services: list, primary: str) -> str:
     for i, svc in enumerate(services[:6]):
         img = images[i % len(images)]
         cards.append(f"""        <div class="group bg-white rounded-2xl overflow-hidden shadow-md border border-gray-100 hover:-translate-y-2 hover:shadow-2xl transition-all duration-300">
-          <div class="overflow-hidden h-52 relative">
-            <img src="{img}" alt="{svc['name']}" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500">
+          <div class="overflow-hidden relative" style="aspect-ratio:4/3">
+            <img src="{img}" alt="{svc['name']}" class="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-500">
             <div class="absolute inset-0 bg-gradient-to-t from-black/30 to-transparent"></div>
           </div>
           <div class="p-6">
@@ -332,6 +352,42 @@ def _build_index_html(data, content: dict, primary: str, primary_dark: str) -> s
     # Show logo.png when we have a URL to download from OR when we're generating one
     has_logo = bool(data.logo_url) or bool(getattr(data, "generate_logo", False))
 
+    # ── Design variant ────────────────────────────────────────────────────────
+    variant = _choose_variant(data.industry, data.style)
+
+    if variant == "bold":
+        # Left-aligned hero, primary-coloured stats bar, strong typography
+        hero_section_cls = "hero-bg flex flex-col justify-center text-white px-8 sm:px-20"
+        hero_inner_cls = "max-w-3xl"
+        hero_h1_cls = "a2 text-5xl md:text-7xl font-black leading-none tracking-tight mb-6"
+        hero_slogan_cls = "a3 text-xl md:text-2xl font-light text-white/80 max-w-xl mb-4 leading-snug"
+        hero_sub_cls = "a3 text-base font-light text-white/55 max-w-lg mb-12 leading-relaxed"
+        hero_btn_cls = "a4 flex flex-col sm:flex-row gap-4"
+        stats_open = f'<div style="background:{primary}" class="py-12 px-6">'
+        about_img_cls = ""
+        about_txt_cls = ""
+    elif variant == "elegant":
+        # Centered hero, gradient stats bar, image on right side of about
+        hero_section_cls = "hero-bg flex flex-col items-center justify-center text-white text-center px-6"
+        hero_inner_cls = "max-w-4xl mx-auto"
+        hero_h1_cls = "a2 text-5xl md:text-7xl font-black leading-none tracking-tight mb-6"
+        hero_slogan_cls = "a3 text-2xl md:text-3xl font-light text-white/80 max-w-2xl mx-auto mb-4 leading-snug"
+        hero_sub_cls = "a3 text-base md:text-lg font-light text-white/55 max-w-xl mx-auto mb-12 leading-relaxed"
+        hero_btn_cls = "a4 flex flex-col sm:flex-row gap-4 justify-center"
+        stats_open = f'<div style="background:linear-gradient(135deg,{primary},{primary_dark})" class="py-12 px-6">'
+        about_img_cls = "md:order-last"
+        about_txt_cls = "md:order-first"
+    else:  # classic
+        hero_section_cls = "hero-bg flex flex-col items-center justify-center text-white text-center px-6"
+        hero_inner_cls = "max-w-4xl mx-auto"
+        hero_h1_cls = "a2 text-6xl md:text-8xl font-black leading-none tracking-tight mb-6"
+        hero_slogan_cls = "a3 text-2xl md:text-3xl font-light text-white/80 max-w-2xl mx-auto mb-4 leading-snug"
+        hero_sub_cls = "a3 text-base md:text-lg font-light text-white/55 max-w-xl mx-auto mb-12 leading-relaxed"
+        hero_btn_cls = "a4 flex flex-col sm:flex-row gap-4 justify-center"
+        stats_open = '<div class="bg-gray-950 py-12 px-6">'
+        about_img_cls = ""
+        about_txt_cls = ""
+
     # Pre-compute all dynamic values before entering the f-string
     if has_logo:
         # onerror hides the img if the file is missing (e.g. generation failed)
@@ -368,7 +424,7 @@ def _build_index_html(data, content: dict, primary: str, primary_dark: str) -> s
         {"number": "100+", "label": "Projekte"},
         {"number": "10+", "label": "Jahre Erfahrung"},
         {"number": "100+", "label": "Kunden"},
-    ]))
+    ]), variant=variant)
     bullets_html = _build_bullets_html(content.get("about_bullets", []), primary)
     service_cards = _build_service_cards(content.get("services", []), primary)
     testimonial_cards = _build_testimonial_cards(content.get("testimonials", []), primary)
@@ -449,13 +505,13 @@ def _build_index_html(data, content: dict, primary: str, primary_dark: str) -> s
   </nav>
 
   <!-- ── HERO ── -->
-  <section class="hero-bg flex flex-col items-center justify-center text-white text-center px-6">
-    <div class="max-w-4xl">
+  <section class="{hero_section_cls}">
+    <div class="{hero_inner_cls}">
       <p class="a1 label text-white/50 mb-5">{data.industry} &bull; {region}</p>
-      <h1 class="a2 text-6xl md:text-8xl font-black leading-none tracking-tight mb-6">{data.company_name}</h1>
-      <p class="a3 text-2xl md:text-3xl font-light text-white/80 max-w-2xl mx-auto mb-4 leading-snug">{slogan}</p>
-      <p class="a3 text-base md:text-lg font-light text-white/55 max-w-xl mx-auto mb-12 leading-relaxed">{hero_subtitle}</p>
-      <div class="a4 flex flex-col sm:flex-row gap-4 justify-center">
+      <h1 class="{hero_h1_cls}">{data.company_name}</h1>
+      <p class="{hero_slogan_cls}">{slogan}</p>
+      <p class="{hero_sub_cls}">{hero_subtitle}</p>
+      <div class="{hero_btn_cls}">
         <a href="angebot.html" class="btn-primary px-11 py-4 rounded-full text-base font-semibold shadow-2xl">
           Kostenlos anfragen
         </a>
@@ -472,7 +528,7 @@ def _build_index_html(data, content: dict, primary: str, primary_dark: str) -> s
   </section>
 
   <!-- ── STATS BAR ── -->
-  <div class="bg-gray-950 py-12 px-6">
+  {stats_open}
     <div class="max-w-3xl mx-auto grid grid-cols-3 gap-4 text-center">
       {stats_html}
     </div>
@@ -480,17 +536,17 @@ def _build_index_html(data, content: dict, primary: str, primary_dark: str) -> s
 
   <!-- ── ABOUT ── -->
   <section id="ueber-uns" class="py-28 px-6 bg-white">
-    <div class="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-20 items-center">
+    <div class="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-16 items-center">
       <!-- Image column -->
-      <div class="relative">
-        <img src="image-06.jpg" alt="Über {data.company_name}" class="w-full h-[500px] object-cover rounded-3xl shadow-2xl">
+      <div class="relative {about_img_cls}">
+        <img src="image-06.jpg" alt="Über {data.company_name}" class="w-full h-[300px] md:h-[440px] object-cover rounded-3xl shadow-2xl">
         <div class="absolute -bottom-5 -right-5 text-white rounded-2xl px-8 py-5 shadow-xl" style="background:{primary}">
           <p class="font-display text-5xl font-black leading-none">{years}+</p>
           <p class="text-xs font-semibold mt-2 uppercase tracking-widest opacity-80">Jahre Erfahrung</p>
         </div>
       </div>
       <!-- Text column -->
-      <div>
+      <div class="{about_txt_cls}">
         <p class="label mb-4">Über uns</p>
         <h2 class="text-4xl md:text-5xl font-bold text-gray-900 leading-tight mb-6">
           Ihre Experten<br>in {region}
@@ -534,17 +590,17 @@ def _build_index_html(data, content: dict, primary: str, primary_dark: str) -> s
       <!-- Asymmetric grid -->
       <div class="grid grid-cols-12 gap-4">
         <div class="col-span-12 md:col-span-8">
-          <img src="image-07.jpg" alt="Projekt" class="w-full h-80 object-cover rounded-2xl shadow-md hover:shadow-xl transition-shadow duration-300 w-full">
+          <img src="image-07.jpg" alt="Projekt" class="w-full h-56 md:h-72 object-cover rounded-2xl shadow-md hover:shadow-xl transition-shadow duration-300">
         </div>
         <div class="col-span-12 md:col-span-4 flex flex-col gap-4">
-          <img src="image-08.jpg" alt="Projekt" class="w-full object-cover rounded-2xl shadow-md hover:shadow-xl transition-shadow duration-300" style="height:152px">
-          <img src="image-10.jpg" alt="Projekt" class="w-full object-cover rounded-2xl shadow-md hover:shadow-xl transition-shadow duration-300" style="height:152px">
+          <img src="image-08.jpg" alt="Projekt" class="w-full object-cover rounded-2xl shadow-md hover:shadow-xl transition-shadow duration-300 h-24 md:h-[136px]">
+          <img src="image-10.jpg" alt="Projekt" class="w-full object-cover rounded-2xl shadow-md hover:shadow-xl transition-shadow duration-300 h-24 md:h-[136px]">
         </div>
         <div class="col-span-12 md:col-span-5">
-          <img src="image-09.jpg" alt="Projekt" class="w-full h-64 object-cover rounded-2xl shadow-md hover:shadow-xl transition-shadow duration-300">
+          <img src="image-09.jpg" alt="Projekt" class="w-full h-48 md:h-56 object-cover rounded-2xl shadow-md hover:shadow-xl transition-shadow duration-300">
         </div>
         <div class="col-span-12 md:col-span-7">
-          <img src="image-05.jpg" alt="Projekt" class="w-full h-64 object-cover rounded-2xl shadow-md hover:shadow-xl transition-shadow duration-300">
+          <img src="image-05.jpg" alt="Projekt" class="w-full h-48 md:h-56 object-cover rounded-2xl shadow-md hover:shadow-xl transition-shadow duration-300">
         </div>
       </div>
     </div>
