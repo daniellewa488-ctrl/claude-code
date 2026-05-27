@@ -32,6 +32,9 @@ def process_email(raw_email: dict, data=None) -> None:
             if crawled.logo_url and not data.logo_url:
                 data.logo_url = crawled.logo_url
                 print(f"[run_once] Using logo found on website: {crawled.logo_url}")
+            elif not crawled.logo_url and not data.logo_url:
+                print("[run_once] No logo found on website — will generate AI logo")
+                data.generate_logo = True
         else:
             print(
                 f"[run_once] Website '{data.website_url}' is unreachable — "
@@ -41,6 +44,11 @@ def process_email(raw_email: dict, data=None) -> None:
     else:
         print("[run_once] No website URL provided — using email data only.")
         crawled = website_crawler.CrawledData(found=False)
+
+    # ── No logo found anywhere → generate one ────────────────────────────────
+    if not data.logo_url and not data.generate_logo:
+        print("[run_once] No logo URL found — will generate AI logo")
+        data.generate_logo = True
 
     print("[run_once] Generating website via Claude...")
     site = html_generator.generate(data, crawled)

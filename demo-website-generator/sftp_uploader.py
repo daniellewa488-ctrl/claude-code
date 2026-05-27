@@ -46,8 +46,9 @@ def upload(slug: str, site, images) -> str:
             print(f"[sftp_uploader] Uploaded {filename}")
 
         if images.logo_bytes:
-            sftp.putfo(io.BytesIO(images.logo_bytes), f"{remote_dir}/logo.png")
-            print("[sftp_uploader] Uploaded logo.png")
+            logo_remote = f"{remote_dir}/{images.logo_filename}"
+            sftp.putfo(io.BytesIO(images.logo_bytes), logo_remote)
+            print(f"[sftp_uploader] Uploaded {images.logo_filename}")
 
         for name, logo_bytes in images.logo_concepts:
             sftp.putfo(io.BytesIO(logo_bytes), f"{remote_dir}/{name}")

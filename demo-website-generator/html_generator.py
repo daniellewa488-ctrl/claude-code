@@ -390,14 +390,20 @@ def _build_index_html(data, content: dict, primary: str, primary_dark: str) -> s
 
     # Pre-compute all dynamic values before entering the f-string
     if has_logo:
-        # onerror hides the img if the file is missing (e.g. generation failed)
+        # Try SVG first (crawled logos), fall back to PNG (AI-generated), then hide
+        _logo_onerror_nav = (
+            "if(this.src.endsWith('.svg')){this.src='logo.png'}else{this.style.display='none'}"
+        )
+        _logo_onerror_footer = (
+            "if(this.src.endsWith('.svg')){this.src='logo.png'}else{this.style.display='none'}"
+        )
         logo_nav = (
-            f'<img src="logo.png" alt="{data.company_name}" '
-            f'class="h-10 w-auto object-contain" onerror="this.style.display=\'none\'">'
+            f'<img src="logo.svg" alt="{data.company_name}" '
+            f'class="h-10 w-auto object-contain" onerror="{_logo_onerror_nav}">'
         )
         logo_footer = (
-            f'<img src="logo.png" alt="{data.company_name}" '
-            f'class="h-8 w-auto object-contain" onerror="this.style.display=\'none\'">'
+            f'<img src="logo.svg" alt="{data.company_name}" '
+            f'class="h-8 w-auto object-contain" onerror="{_logo_onerror_footer}">'
         )
     else:
         ini = _get_initials(data.company_name)

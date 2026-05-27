@@ -12,7 +12,8 @@ TIMEOUT = 90  # increased timeout for slower free model
 class GeneratedImages:
     images: dict = field(default_factory=dict)  # filename → bytes
     logo_bytes: bytes = None
-    logo_concepts: list = field(default_factory=list)  # list of bytes
+    logo_filename: str = "logo.png"   # "logo.svg" or "logo.png"
+    logo_concepts: list = field(default_factory=list)
 
 
 def _build_prompts(company: str, industry: str, region: str, style: str) -> list:
@@ -71,13 +72,18 @@ def generate(data) -> GeneratedImages:
         try:
             print(f"[image_generator] Downloading logo from {data.logo_url}...")
             logo_bytes = _download(data.logo_url)
-            # Skip SVG — can't reliably serve as a raster image
-            stripped = logo_bytes[:100].lstrip()
+            stripped = logo_bytes[:200].lstrip()
             if stripped.startswith((b"<svg", b"<?xml", b"<SVG")):
-                print("[image_generator] Logo is SVG, skipping (not raster-compatible)")
-            else:
+                # SVG logo — serve as logo.svg (browsers handle it perfectly in <img>)
                 result.logo_bytes = logo_bytes
-                print(f"[image_generator] Logo downloaded ({len(logo_bytes):,} bytes)")
+                result.logo_filename = "logo.svg"
+                print(f"[image_generator] SVG logo accepted ({len(logo_bytes):,} bytes) → logo.svg")
+            elif len(logo_bytes) > 100:
+                result.logo_bytes = logo_bytes
+                result.logo_filename = "logo.png"
+                print(f"[image_generator] Logo downloaded ({len(logo_bytes):,} bytes) → logo.png")
+            else:
+                print("[image_generator] Logo response too small, ignoring")
         except Exception as e:
             print(f"[image_generator] Logo download failed: {e}")
 

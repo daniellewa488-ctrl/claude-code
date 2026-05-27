@@ -89,10 +89,13 @@ def _clean_text(soup: BeautifulSoup, max_chars: int = 3500) -> str:
 
 
 def _find_logo(soup: BeautifulSoup, base_url: str) -> str:
-    """Look for a logo <img> by common patterns."""
+    """Look for a logo image using progressively wider patterns."""
+    domain = urlparse(base_url).netloc
+
+    # 1. Any <img> whose src / alt / class / id contains "logo"
     for img in soup.find_all("img"):
         src = img.get("src", "").strip()
-        if not src:
+        if not src or src.startswith("data:"):
             continue
         haystack = " ".join([
             src.lower(),
@@ -103,14 +106,32 @@ def _find_logo(soup: BeautifulSoup, base_url: str) -> str:
         if "logo" in haystack:
             return urljoin(base_url, src)
 
-    # Fallback: first image inside a link that points to the homepage
-    domain = urlparse(base_url).netloc
+    # 2. <img> inside a container whose class or id contains "logo"
+    for container in soup.find_all(class_=re.compile(r"logo", re.I)):
+        img = container.find("img")
+        if img and img.get("src") and not img["src"].startswith("data:"):
+            return urljoin(base_url, img["src"].strip())
+    for container in soup.find_all(id=re.compile(r"logo", re.I)):
+        img = container.find("img")
+        if img and img.get("src") and not img["src"].startswith("data:"):
+            return urljoin(base_url, img["src"].strip())
+
+    # 3. First <img> inside <nav> or <header> (very commonly the logo)
+    for tag in ("nav", "header"):
+        el = soup.find(tag)
+        if el:
+            for img in el.find_all("img"):
+                src = img.get("src", "").strip()
+                if src and not src.startswith("data:") and not src.lower().endswith(".gif"):
+                    return urljoin(base_url, src)
+
+    # 4. First <img> inside a link pointing to the homepage root
     for a in soup.find_all("a", href=True):
         target = urljoin(base_url, a["href"])
-        if urlparse(target).netloc == domain and urlparse(target).path in ("", "/", f"/{urlparse(base_url).path.split('/')[1]}"):
+        if urlparse(target).netloc == domain and urlparse(target).path.rstrip("/") in ("", "/"):
             img = a.find("img")
-            if img and img.get("src"):
-                return urljoin(base_url, img["src"])
+            if img and img.get("src") and not img["src"].startswith("data:"):
+                return urljoin(base_url, img["src"].strip())
 
     return ""
 
