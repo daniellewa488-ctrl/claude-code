@@ -1,11 +1,10 @@
 import re
 import json
-import requests
+import time
 from dataclasses import dataclass
 import config
 
-GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
-MODEL = "llama-3.3-70b-versatile"
+MODEL = "claude-haiku-4-5-20251001"
 
 INDUSTRY_COLORS = {
     "garten": ("green", "#15803d", "#16a34a"),
@@ -26,8 +25,16 @@ INDUSTRY_COLORS = {
 }
 
 
+def _get_colors(industry: str, style: str = "") -> tuple:
+    text = (industry + " " + style).lower()
+    for key, colors in INDUSTRY_COLORS.items():
+        if key in text:
+            return colors
+    return ("blue", "#1d4ed8", "#2563eb")
+
+
 def _parse_json_safe(raw: str) -> dict:
-    """Try multiple strategies to extract valid JSON from Groq response."""
+    """Try multiple strategies to extract valid JSON from response."""
     # Strategy 1: direct parse
     try:
         return json.loads(raw)
@@ -54,43 +61,36 @@ def _parse_json_safe(raw: str) -> dict:
     except json.JSONDecodeError:
         pass
 
-    raise ValueError(f"Could not parse JSON from Groq response: {raw[:200]}")
-    text = (industry + " " + style).lower()
-    for key, colors in INDUSTRY_COLORS.items():
-        if key in text:
-            return colors
-    return ("blue", "#1d4ed8", "#2563eb")
+    raise ValueError(f"Could not parse JSON from response: {raw[:200]}")
 
 
-def _call_groq(system_prompt: str, user_prompt: str, max_tokens: int = 2000, temperature: float = 0.7) -> str:
-    import time
-    headers = {
-        "Authorization": f"Bearer {config.GROQ_API_KEY}",
-        "Content-Type": "application/json",
-    }
-    payload = {
-        "model": MODEL,
-        "messages": [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt},
-        ],
-        "max_tokens": max_tokens,
-        "temperature": temperature,
-    }
+def _call_claude(system_prompt: str, user_prompt: str, max_tokens: int = 2000, temperature: float = 0.7) -> str:
+    import anthropic
+    client = anthropic.Anthropic(api_key=config.ANTHROPIC_API_KEY)
+
     for attempt in range(5):
-        resp = requests.post(GROQ_URL, json=payload, headers=headers, timeout=120)
-        if resp.status_code == 429:
+        try:
+            message = client.messages.create(
+                model=MODEL,
+                max_tokens=max_tokens,
+                temperature=temperature,
+                system=system_prompt,
+                messages=[{"role": "user", "content": user_prompt}],
+            )
+            return message.content[0].text.strip()
+        except anthropic.RateLimitError:
             wait = 10 * (attempt + 1)
-            print(f"[html_generator] Groq rate limit hit, waiting {wait}s before retry...")
+            print(f"[html_generator] Claude rate limit, waiting {wait}s...")
             time.sleep(wait)
-            continue
-        resp.raise_for_status()
-        content = resp.json()["choices"][0]["message"]["content"].strip()
-        content = re.sub(r"^```[a-z]*\n?", "", content)
-        content = re.sub(r"\n?```$", "", content).strip()
-        time.sleep(4)
-        return content
-    raise Exception("Groq API failed after 5 retries")
+        except anthropic.APIStatusError as e:
+            if e.status_code in (529, 503):
+                wait = 10 * (attempt + 1)
+                print(f"[html_generator] Claude overloaded, waiting {wait}s...")
+                time.sleep(wait)
+            else:
+                raise
+
+    raise Exception("Claude API failed after 5 retries")
 
 
 def _generate_content(data, crawled: str) -> dict:
@@ -128,13 +128,13 @@ Return this JSON structure (all text in German):
 
     for attempt in range(3):
         try:
-            raw = _call_groq(system, prompt, max_tokens=1500, temperature=0)
+            raw = _call_claude(system, prompt, max_tokens=1500, temperature=0)
             return _parse_json_safe(raw)
         except (ValueError, json.JSONDecodeError) as e:
             print(f"[html_generator] JSON parse failed (attempt {attempt+1}): {e}")
             if attempt == 2:
                 raise
-    raise Exception("Failed to get valid JSON from Groq after 3 attempts")
+    raise Exception("Failed to get valid JSON after 3 attempts")
 
 
 def _build_service_cards(services: list) -> str:
@@ -208,9 +208,9 @@ def _build_index_html(data, content: dict, primary: str, primary_dark: str) -> s
         <span class="text-xl font-bold text-primary">{data.company_name}</span>
       </div>
       <div class="flex items-center space-x-6">
-        <a href="angebot.html" class="text-gray-600 hover:text-primary font-medium transition-colors">Über uns</a>
-        <a href="angebot.html" class="text-gray-600 hover:text-primary font-medium transition-colors">Leistungen</a>
-        <a href="angebot.html" class="text-gray-600 hover:text-primary font-medium transition-colors">Galerie</a>
+        <a href="#ueber-uns" class="text-gray-600 hover:text-primary font-medium transition-colors">Über uns</a>
+        <a href="#leistungen" class="text-gray-600 hover:text-primary font-medium transition-colors">Leistungen</a>
+        <a href="#galerie" class="text-gray-600 hover:text-primary font-medium transition-colors">Galerie</a>
         <a href="angebot.html" class="btn-primary text-white px-5 py-2 rounded-full font-semibold hover:opacity-90 transition-all">Kontakt</a>
       </div>
     </div>
@@ -228,7 +228,7 @@ def _build_index_html(data, content: dict, primary: str, primary_dark: str) -> s
   </section>
 
   <!-- ABOUT -->
-  <section class="py-24 px-6 bg-gray-50">
+  <section id="ueber-uns" class="py-24 px-6 bg-gray-50">
     <div class="max-w-4xl mx-auto text-center">
       <h2 class="text-4xl font-bold mb-4 text-gray-800">Über uns</h2>
       <div class="w-16 h-1 bg-primary mx-auto mb-8 rounded"></div>
@@ -240,7 +240,7 @@ def _build_index_html(data, content: dict, primary: str, primary_dark: str) -> s
   </section>
 
   <!-- SERVICES -->
-  <section class="py-24 px-6 bg-white">
+  <section id="leistungen" class="py-24 px-6 bg-white">
     <div class="max-w-6xl mx-auto">
       <div class="text-center mb-16">
         <h2 class="text-4xl font-bold text-gray-800 mb-4">Unsere Leistungen</h2>
@@ -258,7 +258,7 @@ def _build_index_html(data, content: dict, primary: str, primary_dark: str) -> s
   </section>
 
   <!-- GALLERY -->
-  <section class="py-24 px-6 bg-gray-50">
+  <section id="galerie" class="py-24 px-6 bg-gray-50">
     <div class="max-w-6xl mx-auto">
       <div class="text-center mb-16">
         <h2 class="text-4xl font-bold text-gray-800 mb-4">Galerie</h2>
@@ -384,13 +384,13 @@ Format:
 - CTA: Termin oder Rückruf
 - Unterschrift: Hannah Müller, Hannah's Webdesign, hallo@hannahs-webdesign.de"""
 
-    return _call_groq(system, prompt, max_tokens=600)
+    return _call_claude(system, prompt, max_tokens=600)
 
 
 def generate(data, crawled: str) -> GeneratedSite:
     _, primary, primary_dark = _get_colors(data.industry, data.style)
 
-    print("[html_generator] Generating content via Groq...")
+    print("[html_generator] Generating content via Claude...")
     content = _generate_content(data, crawled)
 
     print("[html_generator] Building HTML from template...")

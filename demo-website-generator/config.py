@@ -15,8 +15,11 @@ SMTP_PORT = int(os.getenv("SMTP_PORT") or "465")
 SMTP_USER = os.environ["SMTP_USER"]
 SMTP_PASS = os.environ["SMTP_PASS"]
 
-# Groq
+# Groq (used for email parsing)
 GROQ_API_KEY = os.environ["GROQ_API_KEY"]
+
+# Anthropic Claude (used for HTML/content generation)
+ANTHROPIC_API_KEY = os.environ["ANTHROPIC_API_KEY"]
 
 # STRATO SFTP
 STRATO_SFTP_HOST = os.environ["STRATO_SFTP_HOST"]
