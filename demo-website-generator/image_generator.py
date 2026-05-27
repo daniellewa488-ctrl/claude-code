@@ -77,6 +77,24 @@ def generate(data) -> GeneratedImages:
         except Exception as e:
             print(f"[image_generator] Logo download failed: {e}")
 
+    # Generate a brand-new AI logo if requested and no logo was downloaded
+    if getattr(data, 'generate_logo', False) and not result.logo_bytes:
+        try:
+            print(f"[image_generator] Generating AI logo for '{data.company_name}'...")
+            style_hint = data.style or "professional modern clean"
+            logo_prompt = (
+                f"professional minimalist logo icon for {data.company_name}, "
+                f"{data.industry} company, {style_hint}, "
+                "clean vector illustration style, white background, "
+                "no text labels, suitable as brand mark, high quality"
+            )
+            encoded = quote(logo_prompt)
+            logo_url = f"{POLLINATIONS_BASE}/{encoded}?width=512&height=512&nologo=true&model=turbo"
+            result.logo_bytes = _download(logo_url)
+            print(f"[image_generator] AI logo generated ({len(result.logo_bytes):,} bytes)")
+        except Exception as e:
+            print(f"[image_generator] AI logo generation failed: {e}")
+
     # Generate logo concepts if facelift requested
     if data.logo_facelift:
         logo_prompts = [

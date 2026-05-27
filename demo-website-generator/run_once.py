@@ -21,16 +21,22 @@ def process_email(raw_email: dict) -> None:
 
     # ── Path A: crawl existing website ────────────────────────────────────────
     if data.website_url:
-        print(f"[run_once] Website found: {data.website_url} — crawling...")
+        print(f"[run_once] Website provided: {data.website_url} — crawling...")
         crawled = website_crawler.crawl(data.website_url)
 
-        # Use logo found on their website if the email didn't supply one
-        if crawled.logo_url and not data.logo_url:
-            data.logo_url = crawled.logo_url
-            print(f"[run_once] Using logo discovered on website: {crawled.logo_url}")
+        if crawled.found:
+            # Use logo found on their site if the email didn't supply one
+            if crawled.logo_url and not data.logo_url:
+                data.logo_url = crawled.logo_url
+                print(f"[run_once] Using logo found on website: {crawled.logo_url}")
+        else:
+            print(
+                f"[run_once] Website '{data.website_url}' is unreachable — "
+                "falling back to email data only for content generation"
+            )
     # ── Path B: no website ────────────────────────────────────────────────────
     else:
-        print("[run_once] No website URL — generating content from email data only.")
+        print("[run_once] No website URL provided — using email data only.")
         crawled = website_crawler.CrawledData(found=False)
 
     print("[run_once] Generating website via Claude...")

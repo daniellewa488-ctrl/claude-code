@@ -15,6 +15,7 @@ class JobData:
     website_url: str = ""
     logo_url: str = ""
     logo_facelift: bool = False
+    generate_logo: bool = False   # True when they want an AI logo created from scratch
     region: str = ""
     services: str = ""
     target_audience: str = ""
@@ -52,7 +53,8 @@ def _parse_with_groq(body: str, api_key: str) -> dict:
 - industry: the business industry or type (string)
 - website_url: the website URL if mentioned, empty string if not (string, must start with http if present)
 - logo_url: a direct URL to a logo image if mentioned, empty string if not available (string)
-- logo_facelift: whether a logo redesign/facelift is requested (boolean true/false)
+- logo_facelift: whether a logo redesign/facelift of their EXISTING logo is requested (boolean true/false)
+- generate_logo: true if they want a brand-new AI logo created (no existing logo, but they mention wanting one designed/created/generated OR they provide a company name for the logo instead of a URL); false if they already have a logo URL, or explicitly say no logo needed (string "nein"/"keine"/"no"), or make no mention at all
 - region: city, region or location of the business (string, empty if not mentioned)
 - services: list of services or offerings as a comma-separated string (string, empty if not mentioned)
 - target_audience: who their customers are (string, empty if not mentioned)
@@ -108,6 +110,7 @@ def parse(email_data: dict) -> JobData:
     website = extracted.get("website_url", "").strip()
     logo_url = extracted.get("logo_url", "").strip()
     logo_facelift = bool(extracted.get("logo_facelift", False))
+    generate_logo = bool(extracted.get("generate_logo", False))
     region = extracted.get("region", "").strip()
     services = extracted.get("services", "").strip()
     target = extracted.get("target_audience", "").strip()
@@ -117,13 +120,21 @@ def parse(email_data: dict) -> JobData:
     if not website.startswith("http"):
         website = ""
 
-    # Validate logo URL
+    # Validate logo URL — if invalid, check whether to generate instead
     if not logo_url.startswith("http"):
         logo_url = ""
 
+    # Can't both have a logo URL and request generation
+    if logo_url:
+        generate_logo = False
+
     slug = _slugify(company) if company else "demo"
 
-    print(f"[email_parser] Extracted: company='{company}', industry='{industry}', website='{website}', facelift={logo_facelift}")
+    print(
+        f"[email_parser] Extracted: company='{company}', industry='{industry}', "
+        f"website='{website}', logo_url={bool(logo_url)}, "
+        f"generate_logo={generate_logo}, facelift={logo_facelift}"
+    )
 
     return JobData(
         company_name=company,
@@ -132,6 +143,7 @@ def parse(email_data: dict) -> JobData:
         website_url=website,
         logo_url=logo_url,
         logo_facelift=logo_facelift,
+        generate_logo=generate_logo,
         region=region,
         services=services,
         target_audience=target,

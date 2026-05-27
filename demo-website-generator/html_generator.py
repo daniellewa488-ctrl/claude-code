@@ -308,10 +308,20 @@ def _build_testimonial_cards(testimonials: list, primary: str) -> str:
 # ─── Page builders ────────────────────────────────────────────────────────────
 
 def _build_index_html(data, content: dict, primary: str, primary_dark: str) -> str:
+    # Show logo.png when we have a URL to download from OR when we're generating one
+    has_logo = bool(data.logo_url) or bool(getattr(data, "generate_logo", False))
+
     # Pre-compute all dynamic values before entering the f-string
-    if data.logo_url:
-        logo_nav = f'<img src="logo.png" alt="{data.company_name}" class="h-10 w-auto object-contain">'
-        logo_footer = f'<img src="logo.png" alt="{data.company_name}" class="h-8 w-auto object-contain">'
+    if has_logo:
+        # onerror hides the img if the file is missing (e.g. generation failed)
+        logo_nav = (
+            f'<img src="logo.png" alt="{data.company_name}" '
+            f'class="h-10 w-auto object-contain" onerror="this.style.display=\'none\'">'
+        )
+        logo_footer = (
+            f'<img src="logo.png" alt="{data.company_name}" '
+            f'class="h-8 w-auto object-contain" onerror="this.style.display=\'none\'">'
+        )
     else:
         ini = _get_initials(data.company_name)
         logo_nav = (
