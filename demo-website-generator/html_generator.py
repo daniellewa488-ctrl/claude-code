@@ -180,21 +180,42 @@ def _generate_content_with_website(data, crawled) -> dict:
 
 
 def _generate_content_without_website(data) -> dict:
-    """Path B: no website — generate compelling content from email data."""
+    """Path B: no website — generate compelling content from available data (may be sparse)."""
+    # Build a clear summary of what we actually know
+    known = []
+    if data.company_name:
+        known.append(f"Company name: {data.company_name}")
+    if data.industry:
+        known.append(f"Industry: {data.industry}")
+    if data.region:
+        known.append(f"Region: {data.region}")
+    if data.services:
+        known.append(f"Services mentioned: {data.services}")
+    if data.target_audience:
+        known.append(f"Target audience: {data.target_audience}")
+    if data.style:
+        known.append(f"Style preferences: {data.style}")
+
+    available = "\n".join(known) if known else "No structured info — infer everything from the company name and any context."
+
     system = (
         "You are a professional German copywriter. "
         "Return ONLY valid JSON — no explanation, no markdown fences."
     )
     prompt = (
-        "Create compelling, authentic-feeling website content for a company with NO existing website.\n"
-        "The content must make the business owner think 'this is exactly us!' when they see the demo.\n"
+        "Create compelling, authentic-feeling website content for this business.\n"
+        "Some information may be missing — that is fine. Infer intelligently from what IS available.\n"
+        "The content must feel specific and real, not generic.\n"
         "All text MUST be in German.\n\n"
-        f"Company: {data.company_name}\n"
-        f"Industry: {data.industry}\n"
-        f"Region: {data.region or 'Deutschland'}\n"
-        f"Services: {data.services or 'infer from industry'}\n"
-        f"Target audience: {data.target_audience or 'infer from industry'}\n"
-        f"Style preferences: {data.style or 'professional modern'}\n\n"
+        "=== AVAILABLE INFORMATION ===\n"
+        f"{available}\n\n"
+        "=== INFERENCE RULES (apply when a field is empty) ===\n"
+        "- industry missing → infer from company name\n"
+        "- services missing → infer from industry; always produce 6 relevant services\n"
+        "- target_audience missing → infer from industry\n"
+        "- style missing → choose a style natural to the industry\n"
+        "- region missing → write the about/slogan without mentioning a specific location\n"
+        "- Always produce a complete JSON with all fields filled — never leave values empty\n\n"
         f"Return ONLY this JSON (all text in German):\n{_JSON_SCHEMA}"
     )
     return _try_generate(system, prompt, max_tokens=2000)
@@ -758,6 +779,12 @@ def _generate_outreach_email(data, content: dict, primary: str, has_website: boo
 
 
 def generate(data, crawled) -> GeneratedSite:
+    # Safety fallbacks — parser should fill these, but guard against edge cases
+    if not data.company_name:
+        data.company_name = "Ihr Unternehmen"
+    if not data.industry:
+        data.industry = "professionelles Unternehmen"
+
     primary, primary_dark = _get_colors(data.industry, data.style)
     has_website = hasattr(crawled, "found") and crawled.found
 

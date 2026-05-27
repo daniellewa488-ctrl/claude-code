@@ -16,6 +16,10 @@ class GeneratedImages:
 
 
 def _build_prompts(company: str, industry: str, region: str, style: str) -> list:
+    # Safe defaults so prompts are always meaningful
+    company = company or "professional business"
+    industry = industry or "professional services"
+    region = region or "Germany"
     base = f"{industry} business {region}"
     style_hint = style if style else "professional modern clean"
     return [
@@ -80,11 +84,13 @@ def generate(data) -> GeneratedImages:
     # Generate a brand-new AI logo if requested and no logo was downloaded
     if getattr(data, 'generate_logo', False) and not result.logo_bytes:
         try:
-            print(f"[image_generator] Generating AI logo for '{data.company_name}'...")
+            co = data.company_name or "professional business"
+            ind = data.industry or "professional services"
+            print(f"[image_generator] Generating AI logo for '{co}'...")
             style_hint = data.style or "professional modern clean"
             logo_prompt = (
-                f"professional minimalist logo icon for {data.company_name}, "
-                f"{data.industry} company, {style_hint}, "
+                f"professional minimalist logo icon for {co}, "
+                f"{ind} company, {style_hint}, "
                 "clean vector illustration style, white background, "
                 "no text labels, suitable as brand mark, high quality"
             )

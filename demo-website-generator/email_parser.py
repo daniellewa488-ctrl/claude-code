@@ -45,25 +45,43 @@ def _extract_sender_address(raw_from: str) -> str:
 
 def _parse_with_groq(body: str, api_key: str) -> dict:
     system_prompt = (
-        "You are a data extraction assistant. Extract information from the email body and return ONLY a valid JSON object. "
-        "No explanation, no markdown, just the raw JSON."
+        "You are a smart assistant for a German web design agency. "
+        "Your job is to read incoming emails and extract business information so we can build a demo website. "
+        "Emails can be formal or informal, in German or English, complete or very brief. "
+        "Always extract what you can and INFER the rest intelligently from context. "
+        "Return ONLY a valid JSON object — no explanation, no markdown fences."
     )
-    user_prompt = f"""Extract the following fields from this email body. Return a JSON object with exactly these keys:
-- company_name: the business/company name (string)
-- industry: the business industry or type (string)
-- website_url: the website URL if mentioned, empty string if not (string, must start with http if present)
-- logo_url: a direct URL to a logo image if mentioned, empty string if not available (string)
-- logo_facelift: whether a logo redesign/facelift of their EXISTING logo is requested (boolean true/false)
-- generate_logo: true if they want a brand-new AI logo created (no existing logo, but they mention wanting one designed/created/generated OR they provide a company name for the logo instead of a URL); false if they already have a logo URL, or explicitly say no logo needed (string "nein"/"keine"/"no"), or make no mention at all
-- region: city, region or location of the business (string, empty if not mentioned)
-- services: list of services or offerings as a comma-separated string (string, empty if not mentioned)
-- target_audience: who their customers are (string, empty if not mentioned)
-- style: design style preferences like colors, mood, aesthetic (string, empty if not mentioned)
+    user_prompt = f"""Read this email carefully and extract business info for building a demo website.
+The email may be missing many fields — that is fine. Infer what you can from context.
 
-Email body:
+FIELD RULES:
+- company_name: The business name. Infer from context, email signature, descriptions, or the sender address. If truly unknown, use "Unbekanntes Unternehmen".
+- industry: Business type/sector. ALWAYS fill this — infer from company name, services, descriptions, or any context clue. Never leave empty.
+- website_url: Set ONLY if a full http/https URL is clearly given. Otherwise empty string.
+- logo_url: Set ONLY if a direct image URL (jpg/png/svg/gif) is explicitly given. Otherwise empty string.
+- logo_facelift: true ONLY if they explicitly ask for a redesign of their EXISTING logo.
+- generate_logo: true if they mention needing a new logo created/designed (and have no logo URL). false if logo_url is set, they say no logo, or there is no mention of logo at all.
+- region: City or region. Infer from context or email address domain if possible. Empty string only if truly no indication.
+- services: What they offer. Infer from industry if not mentioned. Never leave empty — always provide something relevant.
+- target_audience: Their customers. Infer from industry if not mentioned.
+- style: Design mood/colors/feeling. Infer from industry if not stated (e.g. bakery → warm, cosy, amber; law firm → serious, navy; garden → natural, green).
+
+EMAIL:
 {body}
 
-Return ONLY the JSON object, nothing else."""
+Return ONLY this JSON object:
+{{
+  "company_name": "...",
+  "industry": "...",
+  "website_url": "...",
+  "logo_url": "...",
+  "logo_facelift": false,
+  "generate_logo": false,
+  "region": "...",
+  "services": "...",
+  "target_audience": "...",
+  "style": "..."
+}}"""
 
     headers = {
         "Authorization": f"Bearer {api_key}",
@@ -75,7 +93,7 @@ Return ONLY the JSON object, nothing else."""
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt},
         ],
-        "max_tokens": 1000,
+        "max_tokens": 1200,
         "temperature": 0,
     }
 
@@ -128,7 +146,8 @@ def parse(email_data: dict) -> JobData:
     if logo_url:
         generate_logo = False
 
-    slug = _slugify(company) if company else "demo"
+    import time as _time
+    slug = _slugify(company) if company else f"anfrage-{int(_time.time())}"
 
     print(
         f"[email_parser] Extracted: company='{company}', industry='{industry}', "
