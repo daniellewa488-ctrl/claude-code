@@ -15,10 +15,11 @@ import demo_logger
 import config
 
 
-def process_email(raw_email: dict) -> None:
+def process_email(raw_email: dict, data=None) -> None:
     print(f"[run_once] Processing email from {raw_email['sender']}")
 
-    data = email_parser.parse(raw_email)
+    if data is None:
+        data = email_parser.parse(raw_email)
     print(f"[run_once] Company: {data.company_name} | Slug: {data.slug}")
 
     # ── Path A: crawl existing website ────────────────────────────────────────
@@ -63,12 +64,11 @@ def main():
     print(f"[run_once] Found {len(emails)} new Workflow email(s).")
     for raw_email in emails:
         company_name = ""
+        data = None
         try:
-            try:
-                company_name = email_parser.parse(raw_email).company_name
-            except Exception:
-                pass
-            process_email(raw_email)
+            data = email_parser.parse(raw_email)
+            company_name = data.company_name
+            process_email(raw_email, data=data)
         except Exception as exc:
             tb = traceback.format_exc()
             print(f"[run_once] ERROR processing email:\n{tb}")
