@@ -1,0 +1,30 @@
+name: Keepalive – prevent scheduled workflow from being disabled
+
+# GitHub disables scheduled workflows after 60 days of repo inactivity.
+# This workflow runs on the 1st of every month and makes a small commit
+# so the check-inbox schedule stays active.
+
+on:
+  schedule:
+    - cron: '0 10 1 * *'   # 1st of every month at 10:00 UTC
+  workflow_dispatch:         # allow manual trigger
+
+jobs:
+  keepalive:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v4
+        with:
+          ref: claude/cool-tesla-94pVh
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Update keepalive timestamp
+        run: |
+          mkdir -p .github
+          echo "Keepalive: $(date -u '+%Y-%m-%d %H:%M UTC')" > .github/keepalive.txt
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config user.name "github-actions[bot]"
+          git add .github/keepalive.txt
+          git diff --staged --quiet && echo "Nothing to commit" || \
+            git commit -m "chore: keepalive [skip ci]" && git push

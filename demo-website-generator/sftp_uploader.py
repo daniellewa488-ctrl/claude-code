@@ -33,6 +33,7 @@ def upload(slug: str, site, images) -> str:
         text_files = {
             "index.html": site.index_html,
             "angebot.html": site.angebot_html,
+            "impressum.html": site.impressum_html,
             "styles.css": site.styles_css,
             ".htaccess": "RewriteEngine Off\nOptions -Indexes\n",
         }

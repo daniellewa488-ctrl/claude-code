@@ -10,6 +10,8 @@ import html_generator
 import image_generator
 import sftp_uploader
 import summary_sender
+import error_notifier
+import demo_logger
 import config
 
 
@@ -51,6 +53,7 @@ def process_email(raw_email: dict) -> None:
     print("[run_once] Sending summary email...")
     summary_sender.send(data, site, images)
 
+    demo_logger.log(data, preview_url, had_website=bool(data.website_url))
     print(f"[run_once] Done: {preview_url}")
 
 
@@ -59,11 +62,20 @@ def main():
     emails = email_reader.fetch_new()
     print(f"[run_once] Found {len(emails)} new Workflow email(s).")
     for raw_email in emails:
+        company_name = ""
         try:
+            try:
+                company_name = email_parser.parse(raw_email).company_name
+            except Exception:
+                pass
             process_email(raw_email)
-        except Exception:
-            print("[run_once] ERROR processing email:")
-            traceback.print_exc()
+        except Exception as exc:
+            tb = traceback.format_exc()
+            print(f"[run_once] ERROR processing email:\n{tb}")
+            try:
+                error_notifier.send(company_name, str(exc), tb)
+            except Exception as notify_err:
+                print(f"[run_once] Could not send error notification: {notify_err}")
 
 
 if __name__ == "__main__":

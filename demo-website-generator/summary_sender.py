@@ -6,7 +6,7 @@ import config
 
 
 def _file_list(site, images) -> str:
-    files = ["index.html", "angebot.html", "styles.css"]
+    files = ["index.html", "angebot.html", "impressum.html", "styles.css"]
     files += list(images.images.keys())
     if images.logo_bytes:
         files.append("logo.png")

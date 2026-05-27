@@ -45,3 +45,12 @@ jobs:
           STRATO_SFTP_PASS: ${{ secrets.STRATO_SFTP_PASS }}
           STRATO_SFTP_ROOT: ${{ secrets.STRATO_SFTP_ROOT }}
           PREVIEW_BASE_URL: ${{ secrets.PREVIEW_BASE_URL }}
+
+      - name: Commit demo log
+        if: always()
+        run: |
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config user.name "github-actions[bot]"
+          git add demo-website-generator/demos.csv 2>/dev/null || true
+          git diff --staged --quiet || git commit -m "chore: log demo [skip ci]"
+          git push origin claude/cool-tesla-94pVh || true

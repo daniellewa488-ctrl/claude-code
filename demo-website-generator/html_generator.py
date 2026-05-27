@@ -385,8 +385,8 @@ def _build_index_html(data, content: dict, primary: str, primary_dark: str) -> s
   <style>
     *, *::before, *::after {{ box-sizing: border-box; }}
     html {{ scroll-behavior: smooth; }}
-    body {{ font-family: 'Inter', sans-serif; -webkit-font-smoothing: antialiased; color: #1f2937; }}
-    h1, h2, h3, .font-display {{ font-family: 'Playfair Display', serif; }}
+    body {{ font-family: 'Inter', system-ui, -apple-system, Arial, sans-serif; -webkit-font-smoothing: antialiased; color: #1f2937; }}
+    h1, h2, h3, .font-display {{ font-family: 'Playfair Display', Georgia, 'Times New Roman', serif; }}
     /* Primary color utilities */
     .text-primary {{ color: {primary}; }}
     .bg-primary {{ background-color: {primary}; }}
@@ -431,6 +431,20 @@ def _build_index_html(data, content: dict, primary: str, primary_dark: str) -> s
         <a href="#kontakt" class="nav-lnk text-white/80 hover:text-white text-sm font-medium transition-colors">Kontakt</a>
         <a href="angebot.html" class="btn-primary px-6 py-2.5 rounded-full text-sm font-semibold shadow-md">Anfragen</a>
       </div>
+      <!-- Hamburger button (mobile only) -->
+      <button id="menu-btn" class="md:hidden flex flex-col gap-1.5 p-2 ml-2" aria-label="Menü öffnen" aria-expanded="false">
+        <span id="hb1" class="block w-6 h-0.5 bg-white transition-all duration-300 origin-center"></span>
+        <span id="hb2" class="block w-6 h-0.5 bg-white transition-all duration-300"></span>
+        <span id="hb3" class="block w-6 h-0.5 bg-white transition-all duration-300 origin-center"></span>
+      </button>
+    </div>
+    <!-- Mobile dropdown menu -->
+    <div id="mobile-menu" class="md:hidden hidden bg-white rounded-2xl shadow-xl mt-3 mx-0 px-6 py-5 space-y-1">
+      <a href="#ueber-uns" class="mobile-nav-lnk block text-gray-700 hover:text-gray-900 font-medium py-2.5 border-b border-gray-100">Über uns</a>
+      <a href="#leistungen" class="mobile-nav-lnk block text-gray-700 hover:text-gray-900 font-medium py-2.5 border-b border-gray-100">Leistungen</a>
+      <a href="#galerie" class="mobile-nav-lnk block text-gray-700 hover:text-gray-900 font-medium py-2.5 border-b border-gray-100">Galerie</a>
+      <a href="#kontakt" class="mobile-nav-lnk block text-gray-700 hover:text-gray-900 font-medium py-2.5">Kontakt</a>
+      <a href="angebot.html" class="btn-primary block text-center px-6 py-3 rounded-full text-sm font-semibold shadow-md mt-3">Anfragen</a>
     </div>
   </nav>
 
@@ -586,6 +600,7 @@ def _build_index_html(data, content: dict, primary: str, primary_dark: str) -> s
           <li><a href="#leistungen" class="hover:text-white transition-colors">Leistungen</a></li>
           <li><a href="#galerie" class="hover:text-white transition-colors">Galerie</a></li>
           <li><a href="angebot.html" class="hover:text-white transition-colors">Website anfragen</a></li>
+          <li><a href="impressum.html" class="hover:text-white transition-colors">Impressum</a></li>
         </ul>
       </div>
       <!-- Contact -->
@@ -604,23 +619,55 @@ def _build_index_html(data, content: dict, primary: str, primary_dark: str) -> s
     </div>
   </footer>
 
-  <!-- Nav scroll behaviour -->
+  <!-- Nav scroll behaviour + hamburger toggle -->
   <script>
     (function () {{
       var nav = document.getElementById('nav');
       var brand = document.getElementById('nav-brand');
       var links = document.querySelectorAll('.nav-lnk');
+      var menuBtn = document.getElementById('menu-btn');
+      var mobileMenu = document.getElementById('mobile-menu');
+      var hb1 = document.getElementById('hb1');
+      var hb2 = document.getElementById('hb2');
+      var hb3 = document.getElementById('hb3');
+      var isOpen = false;
+
       function update() {{
-        if (window.scrollY > 70) {{
-          nav.classList.add('scrolled');
-          brand.style.color = '#111827';
-          links.forEach(function (l) {{ l.style.color = '#4b5563'; }});
-        }} else {{
-          nav.classList.remove('scrolled');
-          brand.style.color = '#ffffff';
-          links.forEach(function (l) {{ l.style.color = 'rgba(255,255,255,0.80)'; }});
+        var scrolled = window.scrollY > 70;
+        nav.classList.toggle('scrolled', scrolled);
+        brand.style.color = scrolled ? '#111827' : '#ffffff';
+        links.forEach(function (l) {{ l.style.color = scrolled ? '#4b5563' : 'rgba(255,255,255,0.80)'; }});
+        if (!isOpen) {{
+          var c = scrolled ? '#111827' : '#ffffff';
+          hb1.style.background = c; hb2.style.background = c; hb3.style.background = c;
         }}
       }}
+
+      menuBtn.addEventListener('click', function () {{
+        isOpen = !isOpen;
+        mobileMenu.classList.toggle('hidden', !isOpen);
+        menuBtn.setAttribute('aria-expanded', isOpen);
+        if (isOpen) {{
+          hb1.style.transform = 'rotate(45deg) translate(4px, 4px)';
+          hb2.style.opacity = '0';
+          hb3.style.transform = 'rotate(-45deg) translate(4px, -4px)';
+          hb1.style.background = '#111827'; hb2.style.background = '#111827'; hb3.style.background = '#111827';
+        }} else {{
+          hb1.style.transform = ''; hb2.style.opacity = '1'; hb3.style.transform = '';
+          update();
+        }}
+      }});
+
+      document.querySelectorAll('.mobile-nav-lnk').forEach(function (l) {{
+        l.addEventListener('click', function () {{
+          isOpen = false;
+          mobileMenu.classList.add('hidden');
+          menuBtn.setAttribute('aria-expanded', 'false');
+          hb1.style.transform = ''; hb2.style.opacity = '1'; hb3.style.transform = '';
+          update();
+        }});
+      }});
+
       window.addEventListener('scroll', update, {{ passive: true }});
     }})();
   </script>
@@ -656,10 +703,11 @@ def _build_angebot_html(data, content: dict, primary: str, primary_dark: str) ->
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
-    body {{ font-family: 'Inter', sans-serif; -webkit-font-smoothing: antialiased; }}
-    h1, h2 {{ font-family: 'Playfair Display', serif; }}
+    body {{ font-family: 'Inter', system-ui, -apple-system, Arial, sans-serif; -webkit-font-smoothing: antialiased; }}
+    h1, h2 {{ font-family: 'Playfair Display', Georgia, 'Times New Roman', serif; }}
     .btn {{ background: {primary}; color: #fff; transition: background 0.2s, transform 0.2s; }}
     .btn:hover {{ background: {primary_dark}; transform: translateY(-2px); }}
+    input:focus, textarea:focus {{ outline: none; border-color: {primary}; box-shadow: 0 0 0 3px {primary}33; }}
   </style>
 </head>
 <body class="bg-gray-50 text-gray-800 min-h-screen">
@@ -718,13 +766,35 @@ def _build_angebot_html(data, content: dict, primary: str, primary_dark: str) ->
       <p class="text-gray-400 text-sm">Einmalig &bull; Keine versteckten Kosten &bull; Zahlbar nach Fertigstellung</p>
     </div>
 
-    <!-- CTA -->
-    <div class="text-center">
-      <a href="mailto:hallo@hannahs-webdesign.de?subject=Anfrage%20Website%20{data.company_name}"
-         class="btn inline-block px-14 py-5 rounded-full text-lg font-bold shadow-xl mb-5">
-        Jetzt kostenlos anfragen
-      </a>
-      <p class="text-gray-400 text-sm">oder <a href="tel:+493012345678" class="underline hover:text-gray-600">+49 30 123 456 789</a> &bull; hallo@hannahs-webdesign.de</p>
+    <!-- CTA Contact Form -->
+    <div class="bg-white rounded-3xl shadow-sm border border-gray-100 p-10">
+      <h2 class="text-2xl font-bold text-gray-900 mb-7 text-center">Jetzt kostenlos anfragen</h2>
+      <form action="https://formsubmit.co/hallo@hannahs-webdesign.de" method="POST" class="space-y-5">
+        <input type="hidden" name="_subject" value="Website-Anfrage: {data.company_name}">
+        <input type="hidden" name="_captcha" value="false">
+        <input type="hidden" name="_next" value="https://www.hannahs-webdesign.de/danke/">
+        <div>
+          <label class="block text-sm font-semibold text-gray-700 mb-2" for="f-name">Ihr Name *</label>
+          <input id="f-name" type="text" name="name" required placeholder="Max Mustermann"
+            class="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm transition-all">
+        </div>
+        <div>
+          <label class="block text-sm font-semibold text-gray-700 mb-2" for="f-email">E-Mail-Adresse *</label>
+          <input id="f-email" type="email" name="email" required placeholder="max@mustermann.de"
+            class="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm transition-all">
+        </div>
+        <div>
+          <label class="block text-sm font-semibold text-gray-700 mb-2" for="f-msg">Nachricht</label>
+          <textarea id="f-msg" name="message" rows="4" placeholder="Erzählen Sie uns von Ihrem Projekt..."
+            class="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm transition-all resize-none"></textarea>
+        </div>
+        <button type="submit" class="btn w-full py-4 rounded-full text-base font-bold shadow-xl">
+          Anfrage absenden
+        </button>
+      </form>
+      <p class="text-center text-gray-400 text-sm mt-5">
+        Oder direkt: <a href="mailto:hallo@hannahs-webdesign.de" class="underline hover:text-gray-600">hallo@hannahs-webdesign.de</a>
+      </p>
     </div>
   </main>
 
@@ -736,12 +806,90 @@ def _build_angebot_html(data, content: dict, primary: str, primary_dark: str) ->
 </html>"""
 
 
+def _build_impressum_html(data, content: dict, primary: str) -> str:
+    company = data.company_name or "Ihr Unternehmen"
+    address = content.get("address", "")
+    phone = content.get("phone", "")
+    email = content.get("email", "")
+    phone_link = re.sub(r"[^0-9+]", "", phone)
+    phone_html = (
+        f'Telefon: <a href="tel:{phone_link}" class="text-blue-600 hover:underline">{phone}</a><br>'
+        if phone else ""
+    )
+    email_html = (
+        f'E-Mail: <a href="mailto:{email}" class="text-blue-600 hover:underline">{email}</a>'
+        if email else ""
+    )
+    return f"""<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Impressum – {company}</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    body {{ font-family: 'Inter', system-ui, -apple-system, Arial, sans-serif; -webkit-font-smoothing: antialiased; }}
+    h1, h2 {{ font-family: 'Playfair Display', Georgia, serif; }}
+  </style>
+</head>
+<body class="bg-gray-50 text-gray-800 min-h-screen">
+  <div class="text-white text-center text-xs py-2.5 font-semibold tracking-wide" style="background:{primary}">
+    Demo erstellt von Hannah's Webdesign
+  </div>
+  <header class="bg-white border-b border-gray-100 px-6 py-4">
+    <div class="max-w-4xl mx-auto flex justify-between items-center">
+      <span class="font-display text-lg font-bold text-gray-900">{company}</span>
+      <a href="index.html" class="text-gray-500 hover:text-gray-800 text-sm font-medium transition-colors">&larr; Zur Website</a>
+    </div>
+  </header>
+  <main class="max-w-2xl mx-auto px-6 py-16">
+    <h1 class="text-4xl font-bold text-gray-900 mb-10">Impressum</h1>
+    <section class="mb-8">
+      <h2 class="text-lg font-bold text-gray-900 mb-3">Angaben gemäß § 5 TMG</h2>
+      <p class="text-gray-700 leading-relaxed">{company}<br>{address}</p>
+    </section>
+    <section class="mb-8">
+      <h2 class="text-lg font-bold text-gray-900 mb-3">Kontakt</h2>
+      <p class="text-gray-700 leading-relaxed">{phone_html}{email_html}</p>
+    </section>
+    <section class="mb-8">
+      <h2 class="text-lg font-bold text-gray-900 mb-3">Haftungsausschluss</h2>
+      <p class="text-gray-600 text-sm leading-relaxed">
+        Die Inhalte dieser Demo-Website wurden mit größtmöglicher Sorgfalt erstellt.
+        Für die Richtigkeit, Vollständigkeit und Aktualität der Inhalte können wir jedoch keine Gewähr übernehmen.
+        Diese Seite ist eine Demo, erstellt von Hannah's Webdesign.
+      </p>
+    </section>
+    <section class="mb-8">
+      <h2 class="text-lg font-bold text-gray-900 mb-3">Urheberrecht</h2>
+      <p class="text-gray-600 text-sm leading-relaxed">
+        Die durch die Seitenbetreiber erstellten Inhalte und Werke auf diesen Seiten unterliegen dem deutschen Urheberrecht.
+        Die Vervielfältigung, Bearbeitung, Verbreitung und jede Art der Verwertung außerhalb der Grenzen des Urheberrechtes
+        bedürfen der schriftlichen Zustimmung des jeweiligen Autors bzw. Erstellers.
+      </p>
+    </section>
+    <div class="mt-12 pt-8 border-t border-gray-200 text-center">
+      <a href="index.html" class="inline-block px-8 py-3 rounded-full text-sm font-semibold text-white" style="background:{primary}">
+        Zurück zur Startseite
+      </a>
+    </div>
+  </main>
+  <footer class="text-center text-gray-400 text-xs py-8 border-t border-gray-100">
+    &copy; 2025 {company} &bull;
+    <a href="angebot.html" class="hover:text-gray-600">Demo von Hannah's Webdesign</a>
+  </footer>
+</body>
+</html>"""
+
+
 # ─── Main dataclass + entry point ────────────────────────────────────────────
 
 @dataclass
 class GeneratedSite:
     index_html: str
     angebot_html: str
+    impressum_html: str
     styles_css: str
     outreach_email: str
 
@@ -798,6 +946,7 @@ def generate(data, crawled) -> GeneratedSite:
     print("[html_generator] Building HTML templates...")
     index_html = _build_index_html(data, content, primary, primary_dark)
     angebot_html = _build_angebot_html(data, content, primary, primary_dark)
+    impressum_html = _build_impressum_html(data, content, primary)
     styles_css = "/* Styles embedded via Tailwind CDN */"
 
     print("[html_generator] Generating outreach email...")
@@ -806,6 +955,7 @@ def generate(data, crawled) -> GeneratedSite:
     return GeneratedSite(
         index_html=index_html,
         angebot_html=angebot_html,
+        impressum_html=impressum_html,
         styles_css=styles_css,
         outreach_email=outreach_email,
     )
