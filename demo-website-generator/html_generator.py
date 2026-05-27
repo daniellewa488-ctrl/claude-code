@@ -96,61 +96,114 @@ def _call_claude(system_prompt: str, user_prompt: str, max_tokens: int = 2000, t
     raise Exception("Claude API failed after 5 retries")
 
 
-def _generate_content(data, crawled: str) -> dict:
-    system = "You are a professional German copywriter. Return ONLY valid JSON with no explanation and no markdown fences."
-    prompt = f"""Create compelling website content for this German company. All text MUST be in German.
-
-Company: {data.company_name}
-Industry: {data.industry}
-Region: {data.region or 'Deutschland'}
-Services: {data.services or 'infer from industry'}
-Target audience: {data.target_audience or 'infer from industry'}
-Style preferences: {data.style or 'professional modern'}
-Existing website content: {crawled[:2000] if crawled else 'none available'}
-
-Return this exact JSON (in German):
-{{
-  "slogan": "compelling 6-10 word slogan for the company",
-  "hero_subtitle": "one professional supporting sentence, 12-18 words",
-  "about": "2-3 sentences about the company, mention region and expertise",
-  "about_bullets": [
-    "Short key strength, max 7 words",
-    "Short key strength, max 7 words",
-    "Short key strength, max 7 words"
-  ],
-  "years_experience": "realistic number string like 8 or 15 or 22",
+_JSON_SCHEMA = """{
+  "slogan": "6-10 word slogan",
+  "hero_subtitle": "12-18 word supporting sentence",
+  "about": "2-3 sentences about the company",
+  "about_bullets": ["key strength 1", "key strength 2", "key strength 3"],
+  "years_experience": "number string like 12",
   "stats": [
-    {{"number": "200+", "label": "Abgeschlossene Projekte"}},
-    {{"number": "15+", "label": "Jahre Erfahrung"}},
-    {{"number": "150+", "label": "Zufriedene Kunden"}}
+    {"number": "X+", "label": "Abgeschlossene Projekte"},
+    {"number": "X+", "label": "Jahre Erfahrung"},
+    {"number": "X+", "label": "Zufriedene Kunden"}
   ],
   "services": [
-    {{"name": "Service name", "description": "one sentence max 12 words"}},
-    {{"name": "Service name", "description": "one sentence max 12 words"}},
-    {{"name": "Service name", "description": "one sentence max 12 words"}},
-    {{"name": "Service name", "description": "one sentence max 12 words"}},
-    {{"name": "Service name", "description": "one sentence max 12 words"}},
-    {{"name": "Service name", "description": "one sentence max 12 words"}}
+    {"name": "name", "description": "one sentence max 12 words"},
+    {"name": "name", "description": "one sentence max 12 words"},
+    {"name": "name", "description": "one sentence max 12 words"},
+    {"name": "name", "description": "one sentence max 12 words"},
+    {"name": "name", "description": "one sentence max 12 words"},
+    {"name": "name", "description": "one sentence max 12 words"}
   ],
   "testimonials": [
-    {{"name": "Full German Name", "role": "brief customer role", "text": "authentic 1-2 sentence review"}},
-    {{"name": "Full German Name", "role": "brief customer role", "text": "authentic 1-2 sentence review"}},
-    {{"name": "Full German Name", "role": "brief customer role", "text": "authentic 1-2 sentence review"}}
+    {"name": "Full Name", "role": "customer role", "text": "1-2 sentence review"},
+    {"name": "Full Name", "role": "customer role", "text": "1-2 sentence review"},
+    {"name": "Full Name", "role": "customer role", "text": "1-2 sentence review"}
   ],
-  "address": "realistic street + number, city in {data.region or 'Deutschland'}",
-  "phone": "realistic German phone like +49 30 12345678",
-  "email": "realistic company email address"
-}}"""
+  "address": "street + number, city",
+  "phone": "+49 ...",
+  "email": "..."
+}"""
 
+
+def _try_generate(system: str, prompt: str, max_tokens: int) -> dict:
     for attempt in range(3):
         try:
-            raw = _call_claude(system, prompt, max_tokens=2000, temperature=0)
+            raw = _call_claude(system, prompt, max_tokens=max_tokens, temperature=0)
             return _parse_json_safe(raw)
         except (ValueError, json.JSONDecodeError) as e:
             print(f"[html_generator] JSON parse failed (attempt {attempt+1}): {e}")
             if attempt == 2:
                 raise
     raise Exception("Failed to get valid JSON after 3 attempts")
+
+
+def _generate_content_with_website(data, crawled) -> dict:
+    """Path A: company has a website — use real scraped content."""
+    contact_rules = []
+    if crawled.contact_phone:
+        contact_rules.append(f"phone MUST be exactly: {crawled.contact_phone}")
+    if crawled.contact_email:
+        contact_rules.append(f"email MUST be exactly: {crawled.contact_email}")
+    if crawled.contact_address:
+        contact_rules.append(f"address MUST be exactly: {crawled.contact_address}")
+    if not contact_rules:
+        contact_rules.append("invent realistic contact details for the region")
+    contact_block = "\n".join(f"- {r}" for r in contact_rules)
+
+    system = (
+        "You are a professional German copywriter and content strategist. "
+        "Return ONLY valid JSON — no explanation, no markdown fences."
+    )
+    prompt = (
+        "This company has an existing website. I have crawled and extracted all its content.\n"
+        "Your task: analyse the content and fill in the JSON schema using their REAL information.\n\n"
+        "CRITICAL RULES:\n"
+        "1. Use their ACTUAL service names found in the scraped content\n"
+        "2. Use their ACTUAL company/about text — improve writing but keep real facts\n"
+        "3. Contact details — follow these instructions exactly:\n"
+        f"{contact_block}\n"
+        "4. Invent realistic defaults only where info is genuinely missing\n"
+        "5. All descriptive text MUST be in professional German\n"
+        "6. Testimonials: invent 3 realistic ones based on their real services\n\n"
+        "=== SCRAPED WEBSITE CONTENT ===\n"
+        f"{crawled.full_text[:5000]}\n\n"
+        "=== COMPANY INFO FROM EMAIL ===\n"
+        f"Name: {data.company_name}\n"
+        f"Industry: {data.industry}\n"
+        f"Region: {data.region or 'Deutschland'}\n"
+        f"Additional services from email: {data.services or 'see website content'}\n"
+        f"Style preferences: {data.style or 'professional modern'}\n\n"
+        f"Return ONLY this JSON (all descriptive text in German):\n{_JSON_SCHEMA}"
+    )
+    return _try_generate(system, prompt, max_tokens=2500)
+
+
+def _generate_content_without_website(data) -> dict:
+    """Path B: no website — generate compelling content from email data."""
+    system = (
+        "You are a professional German copywriter. "
+        "Return ONLY valid JSON — no explanation, no markdown fences."
+    )
+    prompt = (
+        "Create compelling, authentic-feeling website content for a company with NO existing website.\n"
+        "The content must make the business owner think 'this is exactly us!' when they see the demo.\n"
+        "All text MUST be in German.\n\n"
+        f"Company: {data.company_name}\n"
+        f"Industry: {data.industry}\n"
+        f"Region: {data.region or 'Deutschland'}\n"
+        f"Services: {data.services or 'infer from industry'}\n"
+        f"Target audience: {data.target_audience or 'infer from industry'}\n"
+        f"Style preferences: {data.style or 'professional modern'}\n\n"
+        f"Return ONLY this JSON (all text in German):\n{_JSON_SCHEMA}"
+    )
+    return _try_generate(system, prompt, max_tokens=2000)
+
+
+def _generate_content(data, crawled) -> dict:
+    if hasattr(crawled, "found") and crawled.found:
+        return _generate_content_with_website(data, crawled)
+    return _generate_content_without_website(data)
 
 
 # ─── HTML building helpers ────────────────────────────────────────────────────
@@ -662,32 +715,47 @@ class GeneratedSite:
     outreach_email: str
 
 
-def _generate_outreach_email(data, content: dict, primary: str) -> str:
+def _generate_outreach_email(data, content: dict, primary: str, has_website: bool) -> str:
+    if has_website:
+        context = (
+            "Hannah's Webdesign hat Ihre bestehende Website analysiert und eine professionellere "
+            "Neugestaltung als kostenlose Demo erstellt — mit modernem Design und besserer Struktur."
+        )
+    else:
+        context = (
+            "Hannah's Webdesign hat eine kostenlose Demo-Website speziell für Ihr Unternehmen erstellt — "
+            "professionell gestaltet, obwohl Sie noch keine eigene Website haben."
+        )
+
     system = "Du bist ein erfahrener Vertriebstexter. Schreibe präzise Akquise-E-Mails auf Deutsch."
-    prompt = f"""Schreibe eine kurze, professionelle Akquise-E-Mail von Hannah's Webdesign an {data.company_name}.
-
-Kontext:
-- Branche: {data.industry}
-- Region: {data.region or 'Deutschland'}
-- Demo-URL: {config.PREVIEW_BASE_URL}/{data.slug}/
-- Slogan: {content.get('slogan', '')}
-
-Anforderungen:
-- Erste Zeile: Betreff (mit "Betreff: " Prefix)
-- 120-150 Wörter
-- Persönlich und branchenspezifisch
-- Demo-Link einbauen
-- Klarer CTA (Termin oder Rückruf)
-- Keine generischen Floskeln
-- Unterschrift: Hannah Müller, Hannah's Webdesign, hallo@hannahs-webdesign.de"""
-
+    prompt = (
+        f"Schreibe eine kurze, professionelle Akquise-E-Mail von Hannah's Webdesign an {data.company_name}.\n\n"
+        f"Kontext: {context}\n\n"
+        "Details:\n"
+        f"- Branche: {data.industry}\n"
+        f"- Region: {data.region or 'Deutschland'}\n"
+        f"- Demo-URL: {config.PREVIEW_BASE_URL}/{data.slug}/\n"
+        f"- Slogan der Demo: {content.get('slogan', '')}\n\n"
+        "Anforderungen:\n"
+        "- Erste Zeile: Betreff (mit 'Betreff: ' Prefix)\n"
+        "- 120-150 Wörter\n"
+        "- Persönlich, branchenspezifisch, nicht generisch\n"
+        "- Demo-Link klar einbauen\n"
+        "- CTA: Termin oder Rückruf\n"
+        "- Unterschrift: Hannah Müller, Hannah's Webdesign, hallo@hannahs-webdesign.de"
+    )
     return _call_claude(system, prompt, max_tokens=600)
 
 
-def generate(data, crawled: str) -> GeneratedSite:
+def generate(data, crawled) -> GeneratedSite:
     primary, primary_dark = _get_colors(data.industry, data.style)
+    has_website = hasattr(crawled, "found") and crawled.found
 
-    print("[html_generator] Generating content via Claude...")
+    if has_website:
+        print("[html_generator] Path A: generating content from existing website via Claude...")
+    else:
+        print("[html_generator] Path B: generating content from email data via Claude...")
+
     content = _generate_content(data, crawled)
 
     print("[html_generator] Building HTML templates...")
@@ -696,7 +764,7 @@ def generate(data, crawled: str) -> GeneratedSite:
     styles_css = "/* Styles embedded via Tailwind CDN */"
 
     print("[html_generator] Generating outreach email...")
-    outreach_email = _generate_outreach_email(data, content, primary)
+    outreach_email = _generate_outreach_email(data, content, primary, has_website)
 
     return GeneratedSite(
         index_html=index_html,

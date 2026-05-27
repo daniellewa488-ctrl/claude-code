@@ -19,10 +19,21 @@ def process_email(raw_email: dict) -> None:
     data = email_parser.parse(raw_email)
     print(f"[run_once] Company: {data.company_name} | Slug: {data.slug}")
 
-    print("[run_once] Crawling website...")
-    crawled = website_crawler.crawl(data.website_url)
+    # ── Path A: crawl existing website ────────────────────────────────────────
+    if data.website_url:
+        print(f"[run_once] Website found: {data.website_url} — crawling...")
+        crawled = website_crawler.crawl(data.website_url)
 
-    print("[run_once] Generating HTML/CSS via Groq...")
+        # Use logo found on their website if the email didn't supply one
+        if crawled.logo_url and not data.logo_url:
+            data.logo_url = crawled.logo_url
+            print(f"[run_once] Using logo discovered on website: {crawled.logo_url}")
+    # ── Path B: no website ────────────────────────────────────────────────────
+    else:
+        print("[run_once] No website URL — generating content from email data only.")
+        crawled = website_crawler.CrawledData(found=False)
+
+    print("[run_once] Generating website via Claude...")
     site = html_generator.generate(data, crawled)
 
     print("[run_once] Generating images via Pollinations.ai...")
@@ -45,7 +56,7 @@ def main():
         try:
             process_email(raw_email)
         except Exception:
-            print("[run_once] ERROR:")
+            print("[run_once] ERROR processing email:")
             traceback.print_exc()
 
 

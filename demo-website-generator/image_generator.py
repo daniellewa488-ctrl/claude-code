@@ -66,7 +66,14 @@ def generate(data) -> GeneratedImages:
     if data.logo_url:
         try:
             print(f"[image_generator] Downloading logo from {data.logo_url}...")
-            result.logo_bytes = _download(data.logo_url)
+            logo_bytes = _download(data.logo_url)
+            # Skip SVG — can't reliably serve as a raster image
+            stripped = logo_bytes[:100].lstrip()
+            if stripped.startswith((b"<svg", b"<?xml", b"<SVG")):
+                print("[image_generator] Logo is SVG, skipping (not raster-compatible)")
+            else:
+                result.logo_bytes = logo_bytes
+                print(f"[image_generator] Logo downloaded ({len(logo_bytes):,} bytes)")
         except Exception as e:
             print(f"[image_generator] Logo download failed: {e}")
 
