@@ -1,10 +1,11 @@
 import re
 import json
-import requests
+import time
 from dataclasses import dataclass
+import anthropic
+import config
 
-GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
-MODEL = "llama-3.3-70b-versatile"
+MODEL = "claude-haiku-4-5-20251001"
 
 
 @dataclass
@@ -43,7 +44,7 @@ def _extract_sender_address(raw_from: str) -> str:
     return raw_from.strip()
 
 
-def _parse_with_groq(body: str, api_key: str) -> dict:
+def _parse_with_claude(body: str) -> dict:
     system_prompt = (
         "You are a smart assistant for a German web design agency. "
         "Your job is to read incoming emails and extract business information so we can build a demo website. "
@@ -83,45 +84,45 @@ Return ONLY this JSON object:
   "style": "..."
 }}"""
 
-    headers = {
-        "Authorization": f"Bearer {api_key}",
-        "Content-Type": "application/json",
-    }
-    payload = {
-        "model": MODEL,
-        "messages": [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt},
-        ],
-        "max_tokens": 1200,
-        "temperature": 0,
-    }
-
+    client = anthropic.Anthropic(api_key=config.ANTHROPIC_API_KEY)
     for attempt in range(5):
-        resp = requests.post(GROQ_URL, json=payload, headers=headers, timeout=60)
-        if resp.status_code == 429:
-            import time
+        try:
+            msg = client.messages.create(
+                model=MODEL,
+                max_tokens=1200,
+                temperature=0,
+                system=system_prompt,
+                messages=[{"role": "user", "content": user_prompt}],
+            )
+            raw = msg.content[0].text.strip()
+            raw = re.sub(r"^```[a-z]*\n?", "", raw)
+            raw = re.sub(r"\n?```$", "", raw).strip()
+            return json.loads(raw)
+        except anthropic.RateLimitError:
             wait = 10 * (attempt + 1)
-            print(f"[email_parser] Groq rate limit, waiting {wait}s...")
+            print(f"[email_parser] Rate limit, waiting {wait}s...")
             time.sleep(wait)
-            continue
-        resp.raise_for_status()
-        content = resp.json()["choices"][0]["message"]["content"].strip()
-        # Strip markdown fences if present
-        content = re.sub(r"^```[a-z]*\n?", "", content)
-        content = re.sub(r"\n?```$", "", content).strip()
-        return json.loads(content)
+        except anthropic.APIStatusError as e:
+            if e.status_code in (529, 503):
+                wait = 10 * (attempt + 1)
+                print(f"[email_parser] Overloaded, waiting {wait}s...")
+                time.sleep(wait)
+            else:
+                raise
+        except json.JSONDecodeError as e:
+            print(f"[email_parser] JSON parse error (attempt {attempt+1}): {e}")
+            if attempt == 4:
+                raise
 
-    raise Exception("Groq API failed after 5 retries")
+    raise Exception("Claude API failed after 5 retries")
 
 
 def parse(email_data: dict) -> JobData:
-    import config
     body = email_data.get("body", "")
     raw_sender = email_data.get("sender", "")
 
-    print("[email_parser] Using Groq to parse email fields...")
-    extracted = _parse_with_groq(body, config.GROQ_API_KEY)
+    print("[email_parser] Using Claude to parse email fields...")
+    extracted = _parse_with_claude(body)
 
     company = extracted.get("company_name", "").strip()
     industry = extracted.get("industry", "").strip()
@@ -134,20 +135,14 @@ def parse(email_data: dict) -> JobData:
     target = extracted.get("target_audience", "").strip()
     style = extracted.get("style", "").strip()
 
-    # Validate website URL
     if not website.startswith("http"):
         website = ""
-
-    # Validate logo URL — if invalid, check whether to generate instead
     if not logo_url.startswith("http"):
         logo_url = ""
-
-    # Can't both have a logo URL and request generation
     if logo_url:
         generate_logo = False
 
-    import time as _time
-    slug = _slugify(company) if company else f"anfrage-{int(_time.time())}"
+    slug = _slugify(company) if company else f"anfrage-{int(time.time())}"
 
     print(
         f"[email_parser] Extracted: company='{company}', industry='{industry}', "
