@@ -412,7 +412,7 @@ def _build_service_cards(services: list, primary: str) -> str:
                 '</ul>'
             )
         cards.append(f"""        <div class="group bg-white rounded-2xl overflow-hidden shadow-md border border-gray-100 hover:-translate-y-1 hover:shadow-xl transition-all duration-300">
-          <div class="h-48 overflow-hidden">
+          <div class="aspect-video overflow-hidden">
             <img src="{img}" alt="{svc['name']}" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500">
           </div>
           <div class="p-6">
@@ -772,14 +772,14 @@ def _build_index_html(data, content: dict, primary: str, primary_dark: str) -> s
         <p class="label mb-4">Unsere Arbeit</p>
         <h2 class="text-4xl md:text-5xl font-bold text-gray-900">Einblicke in unsere Projekte</h2>
       </div>
-      <!-- Uniform gallery grid: 2 columns on mobile, 3 on desktop -->
+      <!-- Uniform gallery grid: 2 columns on mobile, 3 on desktop, 16:9 aspect ratio -->
       <div class="grid grid-cols-2 md:grid-cols-3 gap-4">
-        <img src="image-07.jpg" alt="Projekt" class="w-full h-44 md:h-52 object-cover rounded-2xl shadow-sm hover:shadow-md hover:scale-[1.02] transition-all duration-300">
-        <img src="image-08.jpg" alt="Projekt" class="w-full h-44 md:h-52 object-cover rounded-2xl shadow-sm hover:shadow-md hover:scale-[1.02] transition-all duration-300">
-        <img src="image-09.jpg" alt="Projekt" class="w-full h-44 md:h-52 object-cover rounded-2xl shadow-sm hover:shadow-md hover:scale-[1.02] transition-all duration-300 hidden md:block">
-        <img src="image-05.jpg" alt="Projekt" class="w-full h-44 md:h-52 object-cover rounded-2xl shadow-sm hover:shadow-md hover:scale-[1.02] transition-all duration-300">
-        <img src="image-10.jpg" alt="Projekt" class="w-full h-44 md:h-52 object-cover rounded-2xl shadow-sm hover:shadow-md hover:scale-[1.02] transition-all duration-300">
-        <img src="image-03.jpg" alt="Projekt" class="w-full h-44 md:h-52 object-cover rounded-2xl shadow-sm hover:shadow-md hover:scale-[1.02] transition-all duration-300 hidden md:block">
+        <div class="aspect-video overflow-hidden rounded-2xl shadow-sm hover:shadow-md hover:scale-[1.02] transition-all duration-300"><img src="image-07.jpg" alt="Projekt" class="w-full h-full object-cover"></div>
+        <div class="aspect-video overflow-hidden rounded-2xl shadow-sm hover:shadow-md hover:scale-[1.02] transition-all duration-300"><img src="image-08.jpg" alt="Projekt" class="w-full h-full object-cover"></div>
+        <div class="aspect-video overflow-hidden rounded-2xl shadow-sm hover:shadow-md hover:scale-[1.02] transition-all duration-300 hidden md:block"><img src="image-09.jpg" alt="Projekt" class="w-full h-full object-cover"></div>
+        <div class="aspect-video overflow-hidden rounded-2xl shadow-sm hover:shadow-md hover:scale-[1.02] transition-all duration-300"><img src="image-05.jpg" alt="Projekt" class="w-full h-full object-cover"></div>
+        <div class="aspect-video overflow-hidden rounded-2xl shadow-sm hover:shadow-md hover:scale-[1.02] transition-all duration-300"><img src="image-10.jpg" alt="Projekt" class="w-full h-full object-cover"></div>
+        <div class="aspect-video overflow-hidden rounded-2xl shadow-sm hover:shadow-md hover:scale-[1.02] transition-all duration-300 hidden md:block"><img src="image-03.jpg" alt="Projekt" class="w-full h-full object-cover"></div>
       </div>
     </div>
   </section>

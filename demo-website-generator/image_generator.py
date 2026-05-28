@@ -1,5 +1,5 @@
-import os
 import time
+import random
 import requests
 from urllib.parse import quote
 from dataclasses import dataclass, field
@@ -17,21 +17,21 @@ class GeneratedImages:
 
 
 def _build_prompts(company: str, industry: str, region: str, style: str) -> list:
-    company = company or "professional business"
+    co = company or "local business"
     industry = industry or "professional services"
     region = region or "Germany"
     style_hint = style if style else "professional modern clean"
     return [
-        f"{industry} exterior building signage, {region}, {style_hint}, wide angle, photorealistic, no text",
-        f"employees workers at {industry} {region}, on the job, {style_hint}, natural light, no text, photorealistic",
-        f"close-up detail {industry} work craftsmanship, high quality, {style_hint}, no text, photorealistic",
-        f"happy satisfied customer with {industry} results, genuine smile, {style_hint}, no text, photorealistic",
-        f"{industry} work in progress, professional, {style_hint}, detailed, no text, photorealistic",
-        f"tools equipment materials for {industry}, professional arrangement, {style_hint}, no text, photorealistic",
-        f"{region} Germany scenery landscape, beautiful, golden hour, cinematic, no text, photorealistic",
-        f"impressive finished result of {industry} project, before after quality, {style_hint}, no text",
-        f"team consultation {industry} client meeting, {style_hint}, professional, no text, photorealistic",
-        f"{industry} product service showcase, studio quality, {style_hint}, clean background, no text",
+        f"{industry} in {region}, exterior building facade, professional signage for {co}, wide angle, photorealistic, golden hour, no text",
+        f"{industry} workers at {co} in {region}, skilled craftspeople on the job, {style_hint}, natural daylight, no text, photorealistic",
+        f"close-up of high-quality {industry} work by {co}, craftsmanship detail, {style_hint}, sharp focus, no text, photorealistic",
+        f"satisfied customer reviewing completed {industry} work, smiling, residential setting in {region}, {style_hint}, no text, photorealistic",
+        f"{industry} project in progress, professional team at work, {region}, {style_hint}, wide shot, no text, photorealistic",
+        f"professional tools and materials for {industry}, neatly arranged, {style_hint}, studio quality, no text, photorealistic",
+        f"beautiful residential outdoor area in {region}, lush surroundings, warm light, cinematic, no text, photorealistic",
+        f"impressive finished {industry} project result, before-after quality, {co}, {style_hint}, no text, photorealistic",
+        f"team of {industry} professionals consulting with homeowner in {region}, {style_hint}, no text, photorealistic",
+        f"{industry} showcase, completed project by {co}, premium quality, {style_hint}, clean composition, no text",
     ]
 
 
@@ -53,12 +53,16 @@ def generate(data) -> GeneratedImages:
     result = GeneratedImages()
     prompts = _build_prompts(data.company_name, data.industry, data.region, data.style)
 
+    # Base seed unique per company so every website gets a different set of images
+    base_seed = random.randint(1, 999999)
+
     for i, prompt in enumerate(prompts, start=1):
         filename = f"image-{i:02d}.jpg"
         encoded = quote(prompt)
-        url = f"{POLLINATIONS_BASE}/{encoded}?width=1280&height=720&nologo=true&model=turbo"
+        seed = base_seed + i
+        url = f"{POLLINATIONS_BASE}/{encoded}?width=1280&height=720&nologo=true&model=turbo&seed={seed}"
         try:
-            print(f"[image_generator] Generating {filename}...")
+            print(f"[image_generator] Generating {filename} (seed={seed})...")
             img_bytes = _download(url)
             result.images[filename] = img_bytes
             time.sleep(1)  # be polite to the free API
@@ -99,7 +103,7 @@ def generate(data) -> GeneratedImages:
                 "no text labels, suitable as brand mark, high quality"
             )
             encoded = quote(logo_prompt)
-            logo_url = f"{POLLINATIONS_BASE}/{encoded}?width=512&height=512&nologo=true&model=turbo"
+            logo_url = f"{POLLINATIONS_BASE}/{encoded}?width=512&height=512&nologo=true&model=turbo&seed={base_seed}"
             result.logo_bytes = _download(logo_url)
             print(f"[image_generator] AI logo generated ({len(result.logo_bytes):,} bytes)")
         except Exception as e:
@@ -114,7 +118,7 @@ def generate(data) -> GeneratedImages:
         ]
         for i, prompt in enumerate(logo_prompts, start=1):
             encoded = quote(prompt)
-            url = f"{POLLINATIONS_BASE}/{encoded}?width=1024&height=512&nologo=true&model=turbo"
+            url = f"{POLLINATIONS_BASE}/{encoded}?width=1024&height=512&nologo=true&model=turbo&seed={base_seed + 100 + i}"
             try:
                 print(f"[image_generator] Generating logo concept {i}...")
                 logo_bytes = _download(url)
