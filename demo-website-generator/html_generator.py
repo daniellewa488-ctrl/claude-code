@@ -115,33 +115,112 @@ def _call_claude(system_prompt: str, user_prompt: str, max_tokens: int = 2000, t
 
 
 _JSON_SCHEMA = """{
-  "slogan": "6-10 word slogan",
-  "hero_subtitle": "12-18 word supporting sentence",
-  "about": "2-3 sentences about the company",
-  "about_bullets": ["key strength 1", "key strength 2", "key strength 3"],
-  "years_experience": "number string like 12",
+  "meta_title": "Company – Hauptleistung | Stadt (max 60 Zeichen)",
+  "meta_description": "SEO-Beschreibung mit lokalen Keywords (max 155 Zeichen)",
+  "schema_type": "LocalBusiness",
+  "slogan": "Starke H1-Überschrift für den Hero (8-12 Wörter)",
+  "hero_subtitle": "Unterstützender Satz 12-18 Wörter",
+  "about": "3-4 Sätze über das Unternehmen mit echten Fakten",
+  "about_bullets": ["Stärke 1", "Stärke 2", "Stärke 3"],
+  "years_experience": "Zahl als String z.B. 25",
   "stats": [
     {"number": "X+", "label": "Abgeschlossene Projekte"},
     {"number": "X+", "label": "Jahre Erfahrung"},
     {"number": "X+", "label": "Zufriedene Kunden"}
   ],
   "services": [
-    {"name": "name", "description": "one sentence max 12 words"},
-    {"name": "name", "description": "one sentence max 12 words"},
-    {"name": "name", "description": "one sentence max 12 words"},
-    {"name": "name", "description": "one sentence max 12 words"},
-    {"name": "name", "description": "one sentence max 12 words"},
-    {"name": "name", "description": "one sentence max 12 words"}
+    {"name": "Name", "description": "Satz max 15 Wörter", "details": ["Detail 1", "Detail 2", "Detail 3"]},
+    {"name": "Name", "description": "Satz max 15 Wörter", "details": ["Detail 1", "Detail 2", "Detail 3"]},
+    {"name": "Name", "description": "Satz max 15 Wörter", "details": ["Detail 1", "Detail 2", "Detail 3"]},
+    {"name": "Name", "description": "Satz max 15 Wörter", "details": ["Detail 1", "Detail 2", "Detail 3"]},
+    {"name": "Name", "description": "Satz max 15 Wörter", "details": ["Detail 1", "Detail 2", "Detail 3"]},
+    {"name": "Name", "description": "Satz max 15 Wörter", "details": ["Detail 1", "Detail 2", "Detail 3"]}
+  ],
+  "extra_sections": [
+    {
+      "title": "Abschnittstitel z.B. Unser Sortiment",
+      "intro": "Einleitender Satz für diesen Abschnitt",
+      "items": [
+        {"name": "Produkt oder Leistungsname", "description": "kurze Beschreibung"}
+      ]
+    }
   ],
   "testimonials": [
-    {"name": "Full Name", "role": "customer role", "text": "1-2 sentence review"},
-    {"name": "Full Name", "role": "customer role", "text": "1-2 sentence review"},
-    {"name": "Full Name", "role": "customer role", "text": "1-2 sentence review"}
+    {"name": "Vollständiger Name", "role": "Kundentyp", "text": "1-2 Sätze Bewertung"},
+    {"name": "Vollständiger Name", "role": "Kundentyp", "text": "1-2 Sätze Bewertung"},
+    {"name": "Vollständiger Name", "role": "Kundentyp", "text": "1-2 Sätze Bewertung"}
   ],
-  "address": "street + number, city",
+  "address": "Straße + Hausnummer, PLZ Stadt",
   "phone": "+49 ...",
   "email": "..."
 }"""
+
+
+def _get_industry_content_rules(industry: str) -> str:
+    text = industry.lower()
+    if any(k in text for k in ["baumschule", "baum", "bäume", "pflanzen", "staude", "gehölz", "nursery"]):
+        return (
+            "INDUSTRY: Baumschule / Nursery. schema_type='GardenStore'.\n"
+            "extra_sections MUST include 'Unser Sortiment' with relevant plant group items:\n"
+            "Bäume, Sträucher, Heckenpflanzen, Obstgehölze, Rosen, Stauden, Solitärpflanzen,\n"
+            "Formgehölze, Nadelgehölze, Laubgehölze, Kletterpflanzen, Containerpflanzen, Ballenware.\n"
+            "Only include groups actually mentioned or strongly implied from the content."
+        )
+    elif any(k in text for k in ["galabau", "landschaft", "gartenbau", "außenanlage"]):
+        return (
+            "INDUSTRY: GaLaBau / Landscaping. schema_type='HomeAndConstructionBusiness'.\n"
+            "extra_sections MUST include 'Leistungsübersicht' with relevant service items:\n"
+            "Gartengestaltung, Gartenplanung, Pflasterarbeiten, Terrassenbau, Wege und Einfahrten,\n"
+            "Natursteinarbeiten, Pflanzarbeiten, Beetgestaltung, Rasenanlage, Rasenpflege,\n"
+            "Hecken- und Gehölzschnitt, Baumpflege, Teichbau, Bewässerungsanlagen,\n"
+            "Gartenpflege, Objektpflege, Grabpflege, Winterdienst.\n"
+            "Only include services relevant to this specific company."
+        )
+    elif any(k in text for k in ["florist", "blumen", "floristi"]):
+        return (
+            "INDUSTRY: Floristik / Florist. schema_type='Florist'.\n"
+            "extra_sections MUST include 'Unser Blumenangebot' with items:\n"
+            "Schnittblumen, Topfpflanzen, Hochzeitsfloristik, Trauerfloristik,\n"
+            "Dekorationen, Florale Geschenke, Grabbepflanzung, Saisonpflanzen,\n"
+            "Dekoartikel, Keramik und Schalen, Blumenerden und Dünger.\n"
+            "Only include items relevant to this company."
+        )
+    elif any(k in text for k in ["garten", "gärtnerei"]):
+        return (
+            "INDUSTRY: Garten / Garden. schema_type='GardenStore'.\n"
+            "extra_sections should reflect the actual garden business areas found."
+        )
+    elif any(k in text for k in ["restaurant", "gastro", "café", "küche", "gaststätte", "bistro"]):
+        return (
+            "INDUSTRY: Restaurant / Gastronomy. schema_type='Restaurant'.\n"
+            "extra_sections should include cuisine specialties and occasion types."
+        )
+    elif any(k in text for k in ["bäcker", "bäckerei", "konditor", "backwaren"]):
+        return (
+            "INDUSTRY: Bäckerei / Bakery. schema_type='Bakery'.\n"
+            "extra_sections should include bread varieties, confectionery and catering offer."
+        )
+    elif any(k in text for k in ["arzt", "zahnarzt", "praxis", "medizin", "therapie"]):
+        return (
+            "INDUSTRY: Medical / Healthcare. schema_type='MedicalClinic'.\n"
+            "extra_sections should include treatment areas and patient information."
+        )
+    elif any(k in text for k in ["handwerk", "sanitär", "heizung", "elektro", "maler", "tischler", "schlosser"]):
+        return (
+            "INDUSTRY: Handwerk / Trades. schema_type='HomeAndConstructionBusiness'.\n"
+            "extra_sections should include a detailed service breakdown for this trade."
+        )
+    elif any(k in text for k in ["immobilien", "makler", "vermieten"]):
+        return (
+            "INDUSTRY: Real Estate. schema_type='RealEstateAgent'.\n"
+            "extra_sections should include property types and service areas."
+        )
+    else:
+        return (
+            "INDUSTRY: General Business. schema_type='LocalBusiness'.\n"
+            "Add 1-2 extra_sections for the company's main product/service areas if distinct. "
+            "Otherwise extra_sections = []."
+        )
 
 
 def _try_generate(system: str, prompt: str, max_tokens: int) -> dict:
@@ -157,7 +236,7 @@ def _try_generate(system: str, prompt: str, max_tokens: int) -> dict:
 
 
 def _generate_content_with_website(data, crawled) -> dict:
-    """Path A: company has a website — use real scraped content."""
+    """Path A: company has a website — deep analysis of real scraped content."""
     contact_rules = []
     if crawled.contact_phone:
         contact_rules.append(f"phone MUST be exactly: {crawled.contact_phone}")
@@ -168,75 +247,91 @@ def _generate_content_with_website(data, crawled) -> dict:
     if not contact_rules:
         contact_rules.append("invent realistic contact details for the region")
     contact_block = "\n".join(f"- {r}" for r in contact_rules)
+    industry_rules = _get_industry_content_rules(data.industry)
 
     system = (
-        "You are a professional German copywriter and content strategist. "
+        "You are an expert German web copywriter, SEO specialist and content strategist. "
+        "You deeply analyse existing websites to extract real business information and create "
+        "compelling, highly specific content — never generic. "
         "Return ONLY valid JSON — no explanation, no markdown fences."
     )
     prompt = (
-        "This company has an existing website. I have crawled and extracted all its content.\n"
-        "Your task: analyse the content and fill in the JSON schema using their REAL information.\n\n"
+        f"COMPANY: {data.company_name}\n"
+        f"INDUSTRY: {data.industry}\n"
+        f"REGION: {data.region or 'Deutschland'}\n\n"
+        f"INDUSTRY CONTENT RULES (follow strictly):\n{industry_rules}\n\n"
+        "TASK: Deeply analyse ALL scraped content and create rich, specific website content "
+        "using the company's REAL information. Do not reduce complex businesses to generic phrases.\n\n"
         "CRITICAL RULES:\n"
-        "1. Use their ACTUAL service names found in the scraped content\n"
-        "2. Use their ACTUAL company/about text — improve writing but keep real facts\n"
-        "3. Contact details — follow these instructions exactly:\n"
+        "1. Use ACTUAL service/product names from the scraped content — not invented generic ones\n"
+        "2. Improve writing quality but preserve all real facts, numbers, history, specialties\n"
+        "3. For 'services': extract the 6 most important real services/products this company offers\n"
+        "4. For each service 'details': add 3 specific sub-points (what exactly is included)\n"
+        "5. For 'extra_sections': follow INDUSTRY CONTENT RULES — create detailed industry-specific "
+        "sections that reflect what this business ACTUALLY offers\n"
+        "6. Contact details:\n"
         f"{contact_block}\n"
-        "4. Invent realistic defaults only where info is genuinely missing\n"
-        "5. All descriptive text MUST be in professional German\n"
-        "6. Testimonials: invent 3 realistic ones based on their real services\n\n"
+        "7. meta_title: company name + main service + city (max 60 chars, German)\n"
+        "8. meta_description: compelling local SEO description with service + location keywords "
+        "(max 155 chars, German)\n"
+        "9. All text in professional German — specific, trustworthy, locally relevant\n"
+        "10. Testimonials: 3 realistic German customer reviews matching the real services\n\n"
         "=== SCRAPED WEBSITE CONTENT ===\n"
-        f"{crawled.full_text[:5000]}\n\n"
-        "=== COMPANY INFO FROM EMAIL ===\n"
-        f"Name: {data.company_name}\n"
-        f"Industry: {data.industry}\n"
-        f"Region: {data.region or 'Deutschland'}\n"
-        f"Additional services from email: {data.services or 'see website content'}\n"
-        f"Style preferences: {data.style or 'professional modern'}\n\n"
-        f"Return ONLY this JSON (all descriptive text in German):\n{_JSON_SCHEMA}"
+        f"{crawled.full_text[:6000]}\n\n"
+        "=== EMAIL DATA ===\n"
+        f"Additional services: {data.services or 'see website'}\n"
+        f"Target audience: {data.target_audience or 'infer from content'}\n"
+        f"Style: {data.style or 'professional modern'}\n\n"
+        f"Return ONLY this JSON:\n{_JSON_SCHEMA}"
     )
-    return _try_generate(system, prompt, max_tokens=2500)
+    return _try_generate(system, prompt, max_tokens=3500)
 
 
 def _generate_content_without_website(data) -> dict:
     """Path B: no website — generate compelling content from available data (may be sparse)."""
-    # Build a clear summary of what we actually know
-    known = []
+    known_parts = []
     if data.company_name:
-        known.append(f"Company name: {data.company_name}")
+        known_parts.append(f"Company name: {data.company_name}")
     if data.industry:
-        known.append(f"Industry: {data.industry}")
+        known_parts.append(f"Industry: {data.industry}")
     if data.region:
-        known.append(f"Region: {data.region}")
+        known_parts.append(f"Region: {data.region}")
     if data.services:
-        known.append(f"Services mentioned: {data.services}")
+        known_parts.append(f"Services: {data.services}")
     if data.target_audience:
-        known.append(f"Target audience: {data.target_audience}")
+        known_parts.append(f"Target audience: {data.target_audience}")
     if data.style:
-        known.append(f"Style preferences: {data.style}")
-
-    available = "\n".join(known) if known else "No structured info — infer everything from the company name and any context."
+        known_parts.append(f"Style: {data.style}")
+    available = "\n".join(known_parts) if known_parts else "Infer everything from the company name."
+    industry_rules = _get_industry_content_rules(data.industry)
 
     system = (
-        "You are a professional German copywriter. "
+        "You are an expert German web copywriter and SEO specialist. "
+        "Create authentic, highly specific website content — never generic placeholders. "
         "Return ONLY valid JSON — no explanation, no markdown fences."
     )
     prompt = (
-        "Create compelling, authentic-feeling website content for this business.\n"
-        "Some information may be missing — that is fine. Infer intelligently from what IS available.\n"
-        "The content must feel specific and real, not generic.\n"
-        "All text MUST be in German.\n\n"
+        f"COMPANY: {data.company_name}\n"
+        f"INDUSTRY: {data.industry}\n"
+        f"REGION: {data.region or 'Deutschland'}\n\n"
+        f"INDUSTRY CONTENT RULES (follow strictly):\n{industry_rules}\n\n"
+        "TASK: Create compelling, authentic website content. "
+        "Infer intelligently from available info. Content must feel specific and real.\n\n"
         "=== AVAILABLE INFORMATION ===\n"
         f"{available}\n\n"
-        "=== INFERENCE RULES (apply when a field is empty) ===\n"
-        "- industry missing → infer from company name\n"
-        "- services missing → infer from industry; always produce 6 relevant services\n"
-        "- target_audience missing → infer from industry\n"
-        "- style missing → choose a style natural to the industry\n"
-        "- region missing → write the about/slogan without mentioning a specific location\n"
-        "- Always produce a complete JSON with all fields filled — never leave values empty\n\n"
-        f"Return ONLY this JSON (all text in German):\n{_JSON_SCHEMA}"
+        "RULES:\n"
+        "- industry missing → infer precisely from company name\n"
+        "- services missing → infer from industry, produce 6 highly specific relevant services\n"
+        "- for each service 'details' → 3 specific sub-points showing competence\n"
+        "- extra_sections → follow INDUSTRY CONTENT RULES strictly\n"
+        "- region missing → omit location references in text\n"
+        "- meta_title → company + main service + region (max 60 chars, German)\n"
+        "- meta_description → compelling local SEO description (max 155 chars, German)\n"
+        "- All text in professional German — specific, never generic\n"
+        "- Complete all fields — never leave values empty\n\n"
+        f"Return ONLY this JSON:\n{_JSON_SCHEMA}"
     )
-    return _try_generate(system, prompt, max_tokens=2000)
+    return _try_generate(system, prompt, max_tokens=3500)
 
 
 def _generate_content(data, crawled) -> dict:
@@ -303,14 +398,28 @@ def _build_service_cards(services: list, primary: str) -> str:
     cards = []
     for i, svc in enumerate(services[:6]):
         img = images[i % len(images)]
+        details = svc.get("details", [])
+        details_html = ""
+        if details:
+            details_html = (
+                '<ul class="mt-3 pt-3 border-t border-gray-100 space-y-1">' +
+                "".join(
+                    f'<li class="flex items-center gap-2 text-xs text-gray-400">'
+                    f'<span class="w-1.5 h-1.5 rounded-full flex-shrink-0" style="background:{primary}60"></span>'
+                    f'{d}</li>'
+                    for d in details[:3]
+                ) +
+                '</ul>'
+            )
         cards.append(f"""        <div class="group bg-white rounded-2xl overflow-hidden shadow-md border border-gray-100 hover:-translate-y-1 hover:shadow-xl transition-all duration-300">
           <div class="h-48 overflow-hidden">
             <img src="{img}" alt="{svc['name']}" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500">
           </div>
           <div class="p-6">
             <h3 class="font-display text-xl font-bold text-gray-900 mb-2">{svc['name']}</h3>
-            <p class="text-gray-500 text-sm leading-relaxed mb-5">{svc['description']}</p>
-            <a href="angebot.html" class="inline-flex items-center gap-1.5 text-sm font-semibold" style="color:{primary}">
+            <p class="text-gray-500 text-sm leading-relaxed">{svc['description']}</p>
+            {details_html}
+            <a href="angebot.html" class="inline-flex items-center gap-1.5 text-sm font-semibold mt-5" style="color:{primary}">
               Mehr erfahren {arrow}
             </a>
           </div>
@@ -343,6 +452,52 @@ def _build_testimonial_cards(testimonials: list, primary: str) -> str:
           </div>
         </div>""")
     return "\n".join(cards)
+
+
+def _build_extra_sections_html(extra_sections: list, primary: str) -> str:
+    """Render industry-specific extra sections (assortment, full service list, etc.)."""
+    if not extra_sections:
+        return ""
+    out = []
+    bg_cycle = ["bg-gray-50", "bg-white"]
+    for idx, section in enumerate(extra_sections[:3]):
+        bg = bg_cycle[idx % 2]
+        title = section.get("title", "")
+        intro = section.get("intro", "")
+        items = section.get("items", [])
+        if not items:
+            continue
+        intro_html = (
+            f'<p class="text-gray-500 text-lg mt-4 max-w-2xl mx-auto leading-relaxed">{intro}</p>'
+            if intro else ""
+        )
+        items_html = ""
+        for item in items[:16]:
+            name = item.get("name", item) if isinstance(item, dict) else str(item)
+            desc = item.get("description", "") if isinstance(item, dict) else ""
+            items_html += (
+                f'<div class="flex items-start gap-3 bg-white rounded-xl border border-gray-100 '
+                f'shadow-sm p-4 hover:shadow-md transition-shadow">'
+                f'<span class="w-2 h-2 rounded-full flex-shrink-0 mt-1.5" style="background:{primary}"></span>'
+                f'<div><p class="font-semibold text-gray-900 text-sm">{name}</p>'
+                f'{"<p class=\\'text-gray-400 text-xs mt-0.5\\'>" + desc + "</p>" if desc else ""}'
+                f'</div></div>\n'
+            )
+        out.append(f"""
+  <!-- ── {title.upper()} ── -->
+  <section class="{bg} py-20 px-6">
+    <div class="max-w-6xl mx-auto">
+      <div class="text-center mb-12">
+        <p class="label mb-4">Im Überblick</p>
+        <h2 class="text-4xl md:text-5xl font-bold text-gray-900">{title}</h2>
+        {intro_html}
+      </div>
+      <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+        {items_html}
+      </div>
+    </div>
+  </section>""")
+    return "\n".join(out)
 
 
 # ─── Page builders ────────────────────────────────────────────────────────────
@@ -425,6 +580,25 @@ def _build_index_html(data, content: dict, primary: str, primary_dark: str) -> s
     email = content.get("email", "")
     address = content.get("address", "")
 
+    meta_title = content.get("meta_title") or f"{data.company_name} – {slogan}"
+    meta_desc = content.get("meta_description") or f"Professionelle {data.industry}-Leistungen in {region}. Kontaktieren Sie {data.company_name} für ein persönliches Angebot."
+    schema_type = content.get("schema_type", "LocalBusiness")
+    schema_json = json.dumps({
+        "@context": "https://schema.org",
+        "@type": schema_type,
+        "name": data.company_name,
+        "description": meta_desc,
+        "url": "",
+        "telephone": phone,
+        "email": email,
+        "address": {
+            "@type": "PostalAddress",
+            "streetAddress": address,
+            "addressLocality": region,
+            "addressCountry": "DE"
+        }
+    }, ensure_ascii=False, indent=2)
+
     stats_html = _build_stats_html(content.get("stats", [
         {"number": "100+", "label": "Projekte"},
         {"number": "10+", "label": "Jahre Erfahrung"},
@@ -432,6 +606,7 @@ def _build_index_html(data, content: dict, primary: str, primary_dark: str) -> s
     ]), variant=variant)
     bullets_html = _build_bullets_html(content.get("about_bullets", []), primary)
     service_cards = _build_service_cards(content.get("services", []), primary)
+    extra_sections_html = _build_extra_sections_html(content.get("extra_sections", []), primary)
     testimonial_cards = _build_testimonial_cards(content.get("testimonials", []), primary)
 
     return f"""<!DOCTYPE html>
@@ -439,7 +614,9 @@ def _build_index_html(data, content: dict, primary: str, primary_dark: str) -> s
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>{data.company_name} – {slogan}</title>
+  <title>{meta_title}</title>
+  <meta name="description" content="{meta_desc}">
+  <script type="application/ld+json">{schema_json}</script>
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;0,900;1,400&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -460,8 +637,8 @@ def _build_index_html(data, content: dict, primary: str, primary_dark: str) -> s
       min-height: 100vh;
       position: relative;
     }}
-    /* Nav */
-    #nav {{ transition: background 0.35s, box-shadow 0.35s; }}
+    /* Nav — starts with subtle dark glass, turns white on scroll */
+    #nav {{ background: rgba(0,0,0,0.35); backdrop-filter: blur(8px); transition: background 0.35s, box-shadow 0.35s; }}
     #nav.scrolled {{ background: rgba(255,255,255,0.97); backdrop-filter: blur(14px); box-shadow: 0 2px 24px rgba(0,0,0,0.08); }}
     /* Section label */
     .label {{ font-size: 0.68rem; letter-spacing: 0.2em; text-transform: uppercase; font-weight: 700; color: {primary}; }}
@@ -584,6 +761,8 @@ def _build_index_html(data, content: dict, primary: str, primary_dark: str) -> s
       </div>
     </div>
   </section>
+
+  {extra_sections_html}
 
   <!-- ── GALLERY ── -->
   <section id="galerie" class="py-28 px-6 bg-white">
