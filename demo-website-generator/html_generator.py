@@ -475,12 +475,13 @@ def _build_extra_sections_html(extra_sections: list, primary: str) -> str:
         for item in items[:16]:
             name = item.get("name", item) if isinstance(item, dict) else str(item)
             desc = item.get("description", "") if isinstance(item, dict) else ""
+            desc_html = f'<p class="text-gray-400 text-xs mt-0.5">{desc}</p>' if desc else ""
             items_html += (
                 f'<div class="flex items-start gap-3 bg-white rounded-xl border border-gray-100 '
                 f'shadow-sm p-4 hover:shadow-md transition-shadow">'
                 f'<span class="w-2 h-2 rounded-full flex-shrink-0 mt-1.5" style="background:{primary}"></span>'
                 f'<div><p class="font-semibold text-gray-900 text-sm">{name}</p>'
-                f'{"<p class=\\'text-gray-400 text-xs mt-0.5\\'>" + desc + "</p>" if desc else ""}'
+                f'{desc_html}'
                 f'</div></div>\n'
             )
         out.append(f"""
