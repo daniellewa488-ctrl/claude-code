@@ -1,10 +1,22 @@
 import io
+import re
 import paramiko
 import config
 
+_HTACCESS_MARKER_START = "# BEGIN Demo Websites - Auto-managed"
+_HTACCESS_MARKER_END = "# END Demo Websites"
+_HTACCESS_INJECTION = (
+    "# BEGIN Demo Websites - Auto-managed\n"
+    "<IfModule mod_rewrite.c>\n"
+    "RewriteEngine On\n"
+    "RewriteCond %{REQUEST_FILENAME} -d\n"
+    "RewriteRule ^ - [L]\n"
+    "</IfModule>\n"
+    "# END Demo Websites\n"
+)
+
 
 def _mkdir_p(sftp, remote_path: str):
-    """Create remote directory tree, ignoring if exists."""
     parts = [p for p in remote_path.replace("\\", "/").split("/") if p]
     current = ""
     for part in parts:
@@ -15,11 +27,27 @@ def _mkdir_p(sftp, remote_path: str):
             sftp.mkdir(current)
 
 
+def _patch_root_htaccess(sftp, root_path: str):
+    """Prepend a rule so Apache serves real subdirectories directly, bypassing CMS rewrites."""
+    htaccess_path = f"{root_path}/.htaccess"
+    existing = ""
+    try:
+        with sftp.open(htaccess_path, "r") as f:
+            existing = f.read().decode("utf-8", errors="replace")
+    except FileNotFoundError:
+        pass
+    cleaned = re.sub(
+        rf"{re.escape(_HTACCESS_MARKER_START)}.*?{re.escape(_HTACCESS_MARKER_END)}\n?",
+        "",
+        existing,
+        flags=re.DOTALL,
+    ).lstrip()
+    new_content = _HTACCESS_INJECTION + cleaned
+    sftp.putfo(io.BytesIO(new_content.encode("utf-8")), htaccess_path)
+    print("[sftp_uploader] Patched root .htaccess — demo directories bypass CMS rewrites")
+
+
 def upload(slug: str, site, images) -> str:
-    """
-    Upload all generated files to STRATO under {SFTP_ROOT}/{slug}/.
-    Returns the preview URL.
-    """
     remote_dir = f"{config.STRATO_SFTP_ROOT}/{slug}"
     print(f"[sftp_uploader] Connecting to {config.STRATO_SFTP_HOST}:22 ...")
 
@@ -28,6 +56,7 @@ def upload(slug: str, site, images) -> str:
     sftp = paramiko.SFTPClient.from_transport(transport)
 
     try:
+        _patch_root_htaccess(sftp, config.STRATO_SFTP_ROOT)
         _mkdir_p(sftp, remote_dir)
 
         text_files = {
@@ -35,7 +64,7 @@ def upload(slug: str, site, images) -> str:
             "angebot.html": site.angebot_html,
             "impressum.html": site.impressum_html,
             "styles.css": site.styles_css,
-            ".htaccess": "RewriteEngine Off\nOptions -Indexes\n",
+            ".htaccess": "DirectoryIndex index.html\nOptions -Indexes\n",
         }
         for name, content in text_files.items():
             sftp.putfo(io.BytesIO(content.encode("utf-8")), f"{remote_dir}/{name}")
