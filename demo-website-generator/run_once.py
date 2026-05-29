@@ -54,7 +54,7 @@ def process_email(raw_email: dict, data=None) -> None:
     site = html_generator.generate(data, crawled)
 
     print("[run_once] Generating images via Pollinations.ai...")
-    images = image_generator.generate(data)
+    images = image_generator.generate(data, crawled)
 
     print("[run_once] Uploading to STRATO via SFTP...")
     preview_url = sftp_uploader.upload(data.slug, site, images)

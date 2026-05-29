@@ -1,7 +1,7 @@
 import re
 import time
 import requests
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from urllib.parse import urljoin, urlparse
 from bs4 import BeautifulSoup
 
@@ -10,9 +10,10 @@ TIMEOUT = 12
 
 # Page paths we want to crawl first — most likely to have useful content
 PRIORITY_KEYWORDS = [
+    "galerie", "gallery", "bilder", "fotos", "portfolio", "referenzen", "projekte",
     "ueber-uns", "uber-uns", "about", "about-us", "ueber", "wir",
     "leistungen", "services", "dienstleistungen", "angebote", "produkte",
-    "kontakt", "contact", "impressum",
+    "kontakt", "contact",
     "team", "profil", "unternehmen",
 ]
 
@@ -20,11 +21,12 @@ PRIORITY_KEYWORDS = [
 @dataclass
 class CrawledData:
     found: bool = False
-    full_text: str = ""       # Combined structured text from all pages (fed to Claude)
-    contact_phone: str = ""   # Extracted phone number
-    contact_email: str = ""   # Extracted email
-    contact_address: str = "" # Extracted street address
-    logo_url: str = ""        # Absolute URL of the logo image
+    full_text: str = ""                           # Combined structured text from all pages (fed to Claude)
+    contact_phone: str = ""                       # Extracted phone number
+    contact_email: str = ""                       # Extracted email
+    contact_address: str = ""                     # Extracted street address
+    logo_url: str = ""                            # Absolute URL of the logo image
+    company_image_urls: list = field(default_factory=list)  # Real photos found on their website
 
 
 def _is_priority(url: str) -> bool:
@@ -136,6 +138,52 @@ def _find_logo(soup: BeautifulSoup, base_url: str) -> str:
     return ""
 
 
+def _find_images(soup: BeautifulSoup, base_url: str, seen_urls: set, max_images: int = 5) -> list:
+    """Extract real content photos from the page — skip logos, icons, and tiny images."""
+    found = []
+
+    # Also check CSS background-image in style attributes
+    candidates = soup.find_all("img")
+
+    for img in candidates:
+        src = img.get("src", "").strip()
+        if not src or src.startswith("data:"):
+            continue
+        if not re.search(r"\.(jpe?g|png|webp)(\?.*)?$", src, re.I):
+            continue
+
+        full = urljoin(base_url, src)
+        clean = urlparse(full).scheme + "://" + urlparse(full).netloc + urlparse(full).path
+        if clean in seen_urls:
+            continue
+
+        # Skip logos, icons, sprites, and navigation graphics
+        haystack = " ".join([
+            src.lower(),
+            img.get("alt", "").lower(),
+            " ".join(img.get("class", [])).lower(),
+            img.get("id", "").lower(),
+        ])
+        if any(w in haystack for w in ("logo", "icon", "sprite", "avatar", "pixel", "placeholder", "banner-logo")):
+            continue
+
+        # Skip images that are tiny based on explicit dimensions
+        for attr in ("width", "height"):
+            val = img.get(attr, "")
+            try:
+                if int(str(val).replace("px", "")) < 150:
+                    continue
+            except (ValueError, TypeError):
+                pass
+
+        seen_urls.add(clean)
+        found.append(full)
+        if len(found) >= max_images:
+            break
+
+    return found
+
+
 def _extract_contact(html_text: str) -> dict:
     """Regex-scan raw HTML for phone, email, and German street address."""
     phone_match = re.search(
@@ -164,6 +212,7 @@ def crawl(url: str) -> CrawledData:
     result = CrawledData()
     combined_html = ""
     parts = []
+    seen_image_urls: set = set()
 
     try:
         print(f"[website_crawler] Fetching homepage: {url}")
@@ -178,15 +227,19 @@ def crawl(url: str) -> CrawledData:
             result.logo_url = logo
             print(f"[website_crawler] Found logo: {logo}")
 
-        text = _clean_text(soup, 4000)
+        # Collect content images from homepage
+        homepage_imgs = _find_images(soup, resp.url, seen_image_urls, max_images=4)
+        result.company_image_urls.extend(homepage_imgs)
+
+        text = _clean_text(soup, 5000)
         if text:
             parts.append(f"=== Startseite ===\n{text}")
 
         # Collect subpages to crawl
-        subpages = _internal_links(soup, resp.url)
+        subpages = _internal_links(soup, resp.url, max_links=12)
         print(f"[website_crawler] Found {len(subpages)} subpages to crawl")
 
-        for link in subpages[:5]:
+        for link in subpages[:10]:
             try:
                 sub_resp = requests.get(link, headers=HEADERS, timeout=TIMEOUT, allow_redirects=True)
                 sub_resp.raise_for_status()
@@ -199,8 +252,14 @@ def crawl(url: str) -> CrawledData:
                     if logo:
                         result.logo_url = logo
 
+                # Collect content images — gallery/portfolio pages can contribute more
+                is_gallery = any(kw in link.lower() for kw in ("galerie", "gallery", "bilder", "fotos", "portfolio", "referenz", "projekt"))
+                page_max_imgs = 6 if is_gallery else 3
+                page_imgs = _find_images(sub_soup, link, seen_image_urls, max_images=page_max_imgs)
+                result.company_image_urls.extend(page_imgs)
+
                 page_label = urlparse(link).path.strip("/").split("/")[-1].replace("-", " ").title() or "Seite"
-                sub_text = _clean_text(sub_soup, 2500)
+                sub_text = _clean_text(sub_soup, 3000)
                 if sub_text:
                     parts.append(f"=== {page_label} ===\n{sub_text}")
 
@@ -219,6 +278,7 @@ def crawl(url: str) -> CrawledData:
 
         print(
             f"[website_crawler] Done: {len(parts)} pages crawled | "
+            f"images found: {len(result.company_image_urls)} | "
             f"phone={'yes' if result.contact_phone else 'no'} | "
             f"email={'yes' if result.contact_email else 'no'} | "
             f"address={'yes' if result.contact_address else 'no'} | "

@@ -281,7 +281,9 @@ def _generate_content_with_website(data, crawled) -> dict:
         "=== EMAIL DATA ===\n"
         f"Additional services: {data.services or 'see website'}\n"
         f"Target audience: {data.target_audience or 'infer from content'}\n"
-        f"Style: {data.style or 'professional modern'}\n\n"
+        f"Style: {data.style or 'professional modern'}\n"
+        f"Company photos found on website: {len(getattr(crawled, 'company_image_urls', []))} "
+        f"(first {min(len(getattr(crawled, 'company_image_urls', [])), 10)} will be used as image-01.jpg … image-XX.jpg in the gallery)\n\n"
         f"Return ONLY this JSON:\n{_JSON_SCHEMA}"
     )
     return _try_generate(system, prompt, max_tokens=3500)

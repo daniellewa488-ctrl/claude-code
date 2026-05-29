@@ -49,25 +49,52 @@ def _download(url: str) -> bytes:
                 raise
 
 
-def generate(data) -> GeneratedImages:
+def generate(data, crawled=None) -> GeneratedImages:
     result = GeneratedImages()
-    prompts = _build_prompts(data.company_name, data.industry, data.region, data.style)
-
-    # Base seed unique per company so every website gets a different set of images
     base_seed = random.randint(1, 999999)
 
-    for i, prompt in enumerate(prompts, start=1):
-        filename = f"image-{i:02d}.jpg"
-        encoded = quote(prompt)
-        seed = base_seed + i
-        url = f"{POLLINATIONS_BASE}/{encoded}?width=1280&height=720&nologo=true&model=turbo&seed={seed}"
+    # ── Step 1: Use company's own website photos first ────────────────────────
+    company_slots = 0
+    company_image_urls = getattr(crawled, "company_image_urls", []) if crawled else []
+    if company_image_urls:
+        print(f"[image_generator] Found {len(company_image_urls)} company images to use first")
+    for img_url in company_image_urls:
+        if company_slots >= 10:
+            break
+        slot = company_slots + 1
+        filename = f"image-{slot:02d}.jpg"
         try:
-            print(f"[image_generator] Generating {filename} (seed={seed})...")
-            img_bytes = _download(url)
-            result.images[filename] = img_bytes
-            time.sleep(1)  # be polite to the free API
+            print(f"[image_generator] Downloading company image → {filename}: {img_url}")
+            img_bytes = _download(img_url)
+            if len(img_bytes) > 5000:
+                result.images[filename] = img_bytes
+                company_slots += 1
+            else:
+                print(f"[image_generator] Too small ({len(img_bytes)} bytes), skipping")
         except Exception as e:
-            print(f"[image_generator] Failed {filename}: {e}")
+            print(f"[image_generator] Failed company image {img_url}: {e}")
+
+    # ── Step 2: Fill remaining slots with AI-generated images ─────────────────
+    remaining = 10 - company_slots
+    if remaining > 0:
+        prompts = _build_prompts(data.company_name, data.industry, data.region, data.style)
+        ai_count = 0
+        for i, prompt in enumerate(prompts, start=1):
+            if ai_count >= remaining:
+                break
+            slot = company_slots + ai_count + 1
+            filename = f"image-{slot:02d}.jpg"
+            encoded = quote(prompt)
+            seed = base_seed + i
+            url = f"{POLLINATIONS_BASE}/{encoded}?width=1280&height=720&nologo=true&model=turbo&seed={seed}"
+            try:
+                print(f"[image_generator] Generating AI image {filename} (seed={seed})...")
+                img_bytes = _download(url)
+                result.images[filename] = img_bytes
+                ai_count += 1
+                time.sleep(1)
+            except Exception as e:
+                print(f"[image_generator] Failed {filename}: {e}")
 
     # Download logo if URL provided
     if data.logo_url:
