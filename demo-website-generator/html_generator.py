@@ -1,6 +1,7 @@
 import re
 import json
 import time
+import hashlib
 from dataclasses import dataclass
 import config
 
@@ -45,22 +46,25 @@ def _get_initials(name: str) -> str:
     return name[:2].upper()
 
 
-def _choose_variant(industry: str, style: str) -> str:
-    """Choose one of three distinct layout/feel variants based on industry and style."""
+def _pick_design(industry: str, style: str, company_name: str) -> str:
+    """Return one of 6 variant names deterministically based on industry, style, company name."""
     text = (industry + " " + style).lower()
     elegant_keys = ["beauty", "spa", "wellness", "hotel", "café", "cafe", "friseur",
                     "hochzeit", "blumen", "mode", "schmuck", "kosmetik", "luxus",
                     "restaurant", "bäckerei", "konditorei", "massage"]
     bold_keys = ["it", "tech", "software", "bau", "handwerk", "elektro", "sanitär",
                  "reinigung", "auto", "logistik", "industrie", "sicherheit", "dach",
-                 "garten", "landschaft", "maler", "gerüst", "transport", "lager"]
+                 "garten", "landschaft", "maler", "gerüst", "transport"]
     for k in elegant_keys:
         if k in text:
-            return "elegant"
+            h = int(hashlib.md5(company_name.encode()).hexdigest()[:4], 16)
+            return "warm-luxury" if h % 2 == 0 else "elegant"
     for k in bold_keys:
         if k in text:
-            return "bold"
-    return "classic"
+            h = int(hashlib.md5(company_name.encode()).hexdigest()[:4], 16)
+            return "dark-pro" if h % 2 == 0 else "bold"
+    h = int(hashlib.md5(company_name.encode()).hexdigest()[:4], 16)
+    return ["classic", "split-hero", "minimal-light"][h % 3]
 
 
 def _parse_json_safe(raw: str) -> dict:
@@ -503,6 +507,182 @@ def _build_extra_sections_html(extra_sections: list, primary: str) -> str:
     return "\n".join(out)
 
 
+# ─── New layout helpers for additional variants ───────────────────────────────
+
+def _build_service_cards_2col(services: list, primary: str) -> str:
+    """2-column large service cards for warm-luxury and split-hero variants."""
+    images = ["image-02.jpg", "image-03.jpg", "image-04.jpg",
+              "image-05.jpg", "image-08.jpg", "image-09.jpg"]
+    arrow = (
+        '<svg class="w-4 h-4 transition-transform group-hover:translate-x-1" '
+        'fill="none" stroke="currentColor" viewBox="0 0 24 24">'
+        '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>'
+        '</svg>'
+    )
+    cards = []
+    for i, svc in enumerate(services[:6]):
+        img = images[i % len(images)]
+        details = svc.get("details", [])
+        details_html = ""
+        if details:
+            details_html = (
+                '<ul class="mt-4 pt-4 border-t border-gray-100 space-y-1.5">' +
+                "".join(
+                    f'<li class="flex items-center gap-2 text-xs text-gray-400">'
+                    f'<span class="w-1.5 h-1.5 rounded-full flex-shrink-0" style="background:{primary}60"></span>'
+                    f'{d}</li>'
+                    for d in details[:3]
+                ) +
+                '</ul>'
+            )
+        cards.append(
+            f'        <div class="group bg-white rounded-3xl overflow-hidden shadow-md border border-gray-100'
+            f' hover:-translate-y-1 hover:shadow-xl transition-all duration-300">'
+            f'<div class="aspect-[4/3] overflow-hidden">'
+            f'<img src="{img}" alt="{svc["name"]}" class="w-full h-full object-cover'
+            f' group-hover:scale-105 transition-transform duration-500"></div>'
+            f'<div class="p-8">'
+            f'<h3 class="font-display text-2xl font-bold text-gray-900 mb-3">{svc["name"]}</h3>'
+            f'<p class="text-gray-500 text-sm leading-relaxed">{svc["description"]}</p>'
+            f'{details_html}'
+            f'<a href="angebot.html" class="inline-flex items-center gap-1.5 text-sm font-semibold mt-6"'
+            f' style="color:{primary}">Mehr erfahren {arrow}</a>'
+            f'</div></div>'
+        )
+    return "\n".join(cards)
+
+
+def _build_service_cards_dark(services: list, primary: str) -> str:
+    """Dark-themed service cards for dark-pro variant."""
+    images = ["image-02.jpg", "image-03.jpg", "image-04.jpg",
+              "image-05.jpg", "image-08.jpg", "image-09.jpg"]
+    arrow = (
+        '<svg class="w-4 h-4 transition-transform group-hover:translate-x-1" '
+        'fill="none" stroke="currentColor" viewBox="0 0 24 24">'
+        '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>'
+        '</svg>'
+    )
+    cards = []
+    for i, svc in enumerate(services[:6]):
+        img = images[i % len(images)]
+        details = svc.get("details", [])
+        details_html = ""
+        if details:
+            details_html = (
+                '<ul class="mt-3 pt-3 border-t border-gray-700 space-y-1">' +
+                "".join(
+                    f'<li class="flex items-center gap-2 text-xs text-gray-400">'
+                    f'<span class="w-1.5 h-1.5 rounded-full flex-shrink-0" style="background:{primary}80"></span>'
+                    f'{d}</li>'
+                    for d in details[:3]
+                ) +
+                '</ul>'
+            )
+        cards.append(
+            f'        <div class="group bg-gray-800 border border-gray-700 rounded-2xl overflow-hidden'
+            f' hover:-translate-y-1 hover:shadow-2xl transition-all duration-300">'
+            f'<div class="aspect-video overflow-hidden">'
+            f'<img src="{img}" alt="{svc["name"]}" class="w-full h-full object-cover'
+            f' group-hover:scale-105 transition-transform duration-500"></div>'
+            f'<div class="p-6">'
+            f'<h3 class="font-display text-xl font-bold text-white mb-2">{svc["name"]}</h3>'
+            f'<p class="text-gray-400 text-sm leading-relaxed">{svc["description"]}</p>'
+            f'{details_html}'
+            f'<a href="angebot.html" class="inline-flex items-center gap-1.5 text-sm font-semibold mt-5"'
+            f' style="color:{primary}">Mehr erfahren {arrow}</a>'
+            f'</div></div>'
+        )
+    return "\n".join(cards)
+
+
+def _build_service_rows_minimal(services: list, primary: str) -> str:
+    """Alternating full-width rows for minimal-light variant."""
+    images = ["image-02.jpg", "image-03.jpg", "image-04.jpg",
+              "image-05.jpg", "image-08.jpg", "image-09.jpg"]
+    rows = []
+    for i, svc in enumerate(services[:6]):
+        img = images[i % len(images)]
+        details = svc.get("details", [])
+        details_html = ""
+        if details:
+            details_html = (
+                '<ul class="mt-4 space-y-1">' +
+                "".join(
+                    f'<li class="flex items-center gap-2 text-xs text-gray-400">'
+                    f'<span class="w-1.5 h-1.5 rounded-full flex-shrink-0" style="background:{primary}"></span>'
+                    f'{d}</li>'
+                    for d in details[:3]
+                ) +
+                '</ul>'
+            )
+        img_col = f'<div class="aspect-video md:aspect-auto overflow-hidden"><img src="{img}" alt="{svc["name"]}" class="w-full h-full object-cover"></div>'
+        txt_col = (
+            f'<div class="p-10 flex flex-col justify-center bg-white">'
+            f'<h3 class="font-display text-2xl font-bold text-gray-900 mb-3">{svc["name"]}</h3>'
+            f'<p class="text-gray-500 text-sm leading-relaxed">{svc["description"]}</p>'
+            f'{details_html}'
+            f'<a href="angebot.html" class="inline-flex items-center gap-1.5 text-sm font-semibold mt-6"'
+            f' style="color:{primary}">Anfragen &rarr;</a>'
+            f'</div>'
+        )
+        if i % 2 == 0:
+            row_inner = img_col + txt_col
+        else:
+            row_inner = txt_col + img_col
+        rows.append(
+            f'<div class="reveal grid grid-cols-1 md:grid-cols-2 gap-0 items-stretch border-b border-gray-100">'
+            f'{row_inner}</div>'
+        )
+    return "\n".join(rows)
+
+
+def _build_testimonial_cards_dark(testimonials: list, primary: str) -> str:
+    """Dark testimonial cards for dark-pro."""
+    five_stars = "".join(_star_svg(primary) for _ in range(5))
+    quote_svg = (
+        f'<svg class="w-9 h-9 mb-3 opacity-20" style="fill:{primary}" viewBox="0 0 32 32">'
+        '<path d="M10 8C6.7 8 4 10.7 4 14v10h10V14H7c0-1.7 1.3-3 3-3V8z'
+        'M28 8c-3.3 0-6 2.7-6 6v10h10V14h-7c0-1.7 1.3-3 3-3V8z"/></svg>'
+    )
+    cards = []
+    for t in testimonials[:3]:
+        initials = _get_initials(t.get("name", "KK"))
+        cards.append(
+            f'        <div class="reveal bg-gray-800 border border-gray-700 rounded-2xl p-8">'
+            f'<div class="flex gap-0.5 mb-5">{five_stars}</div>'
+            f'{quote_svg}'
+            f'<p class="text-gray-300 text-sm leading-relaxed mb-6 italic">"{t["text"]}"</p>'
+            f'<div class="flex items-center gap-3">'
+            f'<div class="w-10 h-10 rounded-full flex-shrink-0 flex items-center justify-center text-white text-sm font-bold" style="background:{primary}">'
+            f'{initials}</div>'
+            f'<div><p class="font-semibold text-white text-sm">{t["name"]}</p>'
+            f'<p class="text-gray-500 text-xs mt-0.5">{t["role"]}</p></div>'
+            f'</div></div>'
+        )
+    return "\n".join(cards)
+
+
+def _build_testimonial_cards_border(testimonials: list, primary: str) -> str:
+    """Left-border testimonial cards for minimal-light."""
+    five_stars = "".join(_star_svg(primary) for _ in range(5))
+    cards = []
+    for t in testimonials[:3]:
+        initials = _get_initials(t.get("name", "KK"))
+        cards.append(
+            f'        <div class="reveal bg-white border-l-4 pl-8 pr-6 py-8 shadow-sm"'
+            f' style="border-color:{primary}">'
+            f'<div class="flex gap-0.5 mb-4">{five_stars}</div>'
+            f'<p class="text-gray-600 text-sm leading-relaxed mb-6 italic">"{t["text"]}"</p>'
+            f'<div class="flex items-center gap-3">'
+            f'<div class="w-10 h-10 rounded-full flex-shrink-0 flex items-center justify-center text-white text-sm font-bold" style="background:{primary}">'
+            f'{initials}</div>'
+            f'<div><p class="font-semibold text-gray-900 text-sm">{t["name"]}</p>'
+            f'<p class="text-gray-400 text-xs mt-0.5">{t["role"]}</p></div>'
+            f'</div></div>'
+        )
+    return "\n".join(cards)
+
+
 # ─── Page builders ────────────────────────────────────────────────────────────
 
 def _build_index_html(data, content: dict, primary: str, primary_dark: str) -> str:
@@ -510,40 +690,7 @@ def _build_index_html(data, content: dict, primary: str, primary_dark: str) -> s
     has_logo = bool(data.logo_url) or bool(getattr(data, "generate_logo", False))
 
     # ── Design variant ────────────────────────────────────────────────────────
-    variant = _choose_variant(data.industry, data.style)
-
-    if variant == "bold":
-        # Left-aligned hero, primary-coloured stats bar, strong typography
-        hero_section_cls = "hero-bg flex flex-col justify-center text-white px-8 sm:px-20"
-        hero_inner_cls = "max-w-3xl"
-        hero_h1_cls = "a2 text-5xl md:text-7xl font-black leading-none tracking-tight mb-6"
-        hero_slogan_cls = "a3 text-xl md:text-2xl font-light text-white/80 max-w-xl mb-4 leading-snug"
-        hero_sub_cls = "a3 text-base font-light text-white/55 max-w-lg mb-12 leading-relaxed"
-        hero_btn_cls = "a4 flex flex-col sm:flex-row gap-4"
-        stats_open = f'<div style="background:{primary}" class="py-12 px-6">'
-        about_img_cls = ""
-        about_txt_cls = ""
-    elif variant == "elegant":
-        # Centered hero, gradient stats bar, image on right side of about
-        hero_section_cls = "hero-bg flex flex-col items-center justify-center text-white text-center px-6"
-        hero_inner_cls = "max-w-4xl mx-auto"
-        hero_h1_cls = "a2 text-5xl md:text-7xl font-black leading-none tracking-tight mb-6"
-        hero_slogan_cls = "a3 text-2xl md:text-3xl font-light text-white/80 max-w-2xl mx-auto mb-4 leading-snug"
-        hero_sub_cls = "a3 text-base md:text-lg font-light text-white/55 max-w-xl mx-auto mb-12 leading-relaxed"
-        hero_btn_cls = "a4 flex flex-col sm:flex-row gap-4 justify-center"
-        stats_open = f'<div style="background:linear-gradient(135deg,{primary},{primary_dark})" class="py-12 px-6">'
-        about_img_cls = "md:order-last"
-        about_txt_cls = "md:order-first"
-    else:  # classic
-        hero_section_cls = "hero-bg flex flex-col items-center justify-center text-white text-center px-6"
-        hero_inner_cls = "max-w-4xl mx-auto"
-        hero_h1_cls = "a2 text-6xl md:text-8xl font-black leading-none tracking-tight mb-6"
-        hero_slogan_cls = "a3 text-2xl md:text-3xl font-light text-white/80 max-w-2xl mx-auto mb-4 leading-snug"
-        hero_sub_cls = "a3 text-base md:text-lg font-light text-white/55 max-w-xl mx-auto mb-12 leading-relaxed"
-        hero_btn_cls = "a4 flex flex-col sm:flex-row gap-4 justify-center"
-        stats_open = '<div class="bg-gray-950 py-12 px-6">'
-        about_img_cls = ""
-        about_txt_cls = ""
+    variant = _pick_design(data.industry, data.style, data.company_name)
 
     # Pre-compute all dynamic values before entering the f-string
     if has_logo:
@@ -602,15 +749,725 @@ def _build_index_html(data, content: dict, primary: str, primary_dark: str) -> s
         }
     }, ensure_ascii=False, indent=2)
 
-    stats_html = _build_stats_html(content.get("stats", [
+    default_stats = [
         {"number": "100+", "label": "Projekte"},
         {"number": "10+", "label": "Jahre Erfahrung"},
         {"number": "100+", "label": "Kunden"},
-    ]), variant=variant)
+    ]
+    stats_data = content.get("stats", default_stats)
+    stats_html = _build_stats_html(stats_data, variant=variant)
     bullets_html = _build_bullets_html(content.get("about_bullets", []), primary)
-    service_cards = _build_service_cards(content.get("services", []), primary)
+    services_data = content.get("services", [])
     extra_sections_html = _build_extra_sections_html(content.get("extra_sections", []), primary)
-    testimonial_cards = _build_testimonial_cards(content.get("testimonials", []), primary)
+    testimonials_data = content.get("testimonials", [])
+
+    # ── Variant-specific pre-computed blocks ─────────────────────────────────
+    # Gallery hover overlay snippet (shared)
+    def _gimg(src, extra_cls="rounded-2xl"):
+        return (
+            f'<div class="reveal group relative overflow-hidden {extra_cls} shadow-sm">'
+            f'<img src="{src}" alt="Projekt" class="w-full h-full object-cover'
+            f' group-hover:scale-110 transition-transform duration-700">'
+            f'<div class="absolute inset-0 bg-black/50 flex items-center justify-center'
+            f' opacity-0 group-hover:opacity-100 transition-opacity duration-300">'
+            f'<span class="text-white font-semibold text-sm tracking-wide">Projekt ansehen</span>'
+            f'</div></div>'
+        )
+
+    if variant == "bold":
+        hero_overlay = "linear-gradient(to right, rgba(0,0,0,0.80) 0%, rgba(0,0,0,0.35) 100%)"
+        hero_section_open = (
+            f'<section style="background:url(\'image-01.jpg\') center/cover no-repeat;'
+            f'min-height:100vh;position:relative;display:flex;flex-direction:column;justify-content:center;'
+            f'background-image:linear-gradient(to right, rgba(0,0,0,0.80) 0%, rgba(0,0,0,0.35) 100%),'
+            f'url(\'image-01.jpg\');background-size:cover;background-position:center;" class="text-white px-8 sm:px-20">'
+        )
+        hero_inner_open = '<div class="max-w-3xl">'
+        hero_label_cls = "label text-white/50 mb-5 block"
+        hero_h1_cls = "text-5xl md:text-7xl font-black leading-none tracking-tight mb-6"
+        hero_p1_cls = "text-xl md:text-2xl font-light text-white/80 max-w-xl mb-4 leading-snug"
+        hero_p2_cls = "text-base font-light text-white/55 max-w-lg mb-12 leading-relaxed"
+        hero_btn_cls = "flex flex-col sm:flex-row gap-4"
+        stats_open_tag = f'<div style="background:{primary}" class="py-12 px-6">'
+        stats_close_tag = "</div>"
+        about_section = f"""
+  <section id="ueber-uns" class="py-28 px-6 bg-white">
+    <div class="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-16 items-center">
+      <div class="relative">
+        <img src="image-06.jpg" alt="Über {data.company_name}" class="w-full h-[300px] md:h-[440px] object-cover rounded-3xl shadow-2xl">
+        <div class="absolute -bottom-5 -right-5 text-white rounded-2xl px-8 py-5 shadow-xl" style="background:{primary}">
+          <p class="font-display text-5xl font-black leading-none">{years}+</p>
+          <p class="text-xs font-semibold mt-2 uppercase tracking-widest opacity-80">Jahre Erfahrung</p>
+        </div>
+      </div>
+      <div class="reveal">
+        <p class="label mb-4">Über uns</p>
+        <h2 class="text-4xl md:text-5xl font-bold text-gray-900 leading-tight mb-6">Ihre Experten<br>in {region}</h2>
+        <p class="text-gray-500 text-lg leading-relaxed mb-8">{about}</p>
+        <ul class="space-y-3.5 mb-10">{bullets_html}</ul>
+        <a href="angebot.html" class="btn-primary inline-block px-9 py-3.5 rounded-full text-sm font-semibold">Kontakt aufnehmen &rarr;</a>
+      </div>
+    </div>
+  </section>"""
+        services_section = f"""
+  <section id="leistungen" class="py-28 px-6 bg-gray-50">
+    <div class="max-w-6xl mx-auto">
+      <div class="text-center mb-16 reveal">
+        <p class="label mb-4">Was wir anbieten</p>
+        <h2 class="text-4xl md:text-5xl font-bold text-gray-900">Unsere Leistungen</h2>
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+{_build_service_cards(services_data, primary)}
+      </div>
+      <div class="text-center mt-14">
+        <a href="angebot.html" class="btn-primary inline-block px-11 py-4 rounded-full text-base font-semibold shadow-lg">Alle Leistungen anfragen</a>
+      </div>
+    </div>
+  </section>"""
+        gallery_section = f"""
+  <section id="galerie" class="py-28 px-6 bg-white">
+    <div class="max-w-6xl mx-auto">
+      <div class="text-center mb-16 reveal">
+        <p class="label mb-4">Unsere Arbeit</p>
+        <h2 class="text-4xl md:text-5xl font-bold text-gray-900">Einblicke in unsere Projekte</h2>
+      </div>
+      <div class="grid grid-cols-2 md:grid-cols-3 gap-4">
+        <div class="aspect-video">{_gimg('image-07.jpg')}</div>
+        <div class="aspect-video">{_gimg('image-08.jpg')}</div>
+        <div class="aspect-video hidden md:block">{_gimg('image-09.jpg')}</div>
+        <div class="aspect-video">{_gimg('image-05.jpg')}</div>
+        <div class="aspect-video">{_gimg('image-10.jpg')}</div>
+        <div class="aspect-video hidden md:block">{_gimg('image-03.jpg')}</div>
+      </div>
+    </div>
+  </section>"""
+        testimonials_section = f"""
+  <section class="py-28 px-6 bg-gray-50">
+    <div class="max-w-6xl mx-auto">
+      <div class="text-center mb-16 reveal">
+        <p class="label mb-4">Kundenstimmen</p>
+        <h2 class="text-4xl md:text-5xl font-bold text-gray-900">Was unsere Kunden sagen</h2>
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+{_build_testimonial_cards(testimonials_data, primary)}
+      </div>
+    </div>
+  </section>"""
+        cta_section = f"""
+  <section class="py-24 px-6 text-center text-white relative overflow-hidden" style="background:{primary}">
+    <div class="absolute inset-0" style="background:url('image-01.jpg') center/cover;opacity:0.07;filter:grayscale(100%)"></div>
+    <div class="relative max-w-2xl mx-auto">
+      <p class="text-xs uppercase tracking-widest text-white/50 font-semibold mb-6">Kostenloses Erstgespräch</p>
+      <h2 class="text-5xl font-black mb-6 leading-tight">Bereit für Ihr Projekt?</h2>
+      <p class="text-lg opacity-75 leading-relaxed mb-10 max-w-lg mx-auto">Kontaktieren Sie uns — wir beraten Sie gerne unverbindlich und erstellen ein individuelles Angebot.</p>
+      <a href="angebot.html" class="bg-white inline-block px-12 py-5 rounded-full text-base font-bold hover:bg-gray-100 transition-all shadow-2xl" style="color:{primary}">Jetzt kostenlos anfragen</a>
+    </div>
+  </section>"""
+        footer_bg = "bg-gray-950"
+
+    elif variant == "elegant":
+        hero_overlay = "linear-gradient(135deg, rgba(0,0,0,0.65) 0%, rgba(0,0,0,0.30) 100%)"
+        hero_section_open = (
+            f'<section style="background-image:linear-gradient(135deg, rgba(0,0,0,0.65) 0%, rgba(0,0,0,0.30) 100%),'
+            f'url(\'image-01.jpg\');background-size:cover;background-position:center;min-height:100vh;'
+            f'position:relative;" class="flex flex-col items-center justify-center text-white text-center px-6">'
+        )
+        hero_inner_open = '<div class="max-w-4xl mx-auto">'
+        hero_label_cls = "label text-white/50 mb-5 block"
+        hero_h1_cls = "text-5xl md:text-7xl font-black leading-none tracking-tight mb-6"
+        hero_p1_cls = "text-2xl md:text-3xl font-light text-white/80 max-w-2xl mx-auto mb-4 leading-snug"
+        hero_p2_cls = "text-base md:text-lg font-light text-white/55 max-w-xl mx-auto mb-12 leading-relaxed"
+        hero_btn_cls = "flex flex-col sm:flex-row gap-4 justify-center"
+        stats_grad = f"linear-gradient(135deg,{primary},{primary_dark})"
+        stats_open_tag = f'<div style="background:{stats_grad}" class="py-12 px-6">'
+        stats_close_tag = "</div>"
+        about_section = f"""
+  <section id="ueber-uns" class="py-28 px-6 bg-white">
+    <div class="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-16 items-center">
+      <div class="relative md:order-last">
+        <img src="image-06.jpg" alt="Über {data.company_name}" class="w-full h-[300px] md:h-[440px] object-cover rounded-3xl shadow-2xl">
+        <div class="absolute -bottom-5 -right-5 text-white rounded-2xl px-8 py-5 shadow-xl" style="background:{primary}">
+          <p class="font-display text-5xl font-black leading-none">{years}+</p>
+          <p class="text-xs font-semibold mt-2 uppercase tracking-widest opacity-80">Jahre Erfahrung</p>
+        </div>
+      </div>
+      <div class="reveal md:order-first">
+        <p class="label mb-4">Über uns</p>
+        <h2 class="text-4xl md:text-5xl font-bold text-gray-900 leading-tight mb-6">Ihre Experten<br>in {region}</h2>
+        <p class="text-gray-500 text-lg leading-relaxed mb-8">{about}</p>
+        <ul class="space-y-3.5 mb-10">{bullets_html}</ul>
+        <a href="angebot.html" class="btn-primary inline-block px-9 py-3.5 rounded-full text-sm font-semibold">Kontakt aufnehmen &rarr;</a>
+      </div>
+    </div>
+  </section>"""
+        services_section = f"""
+  <section id="leistungen" class="py-28 px-6 bg-gray-50">
+    <div class="max-w-6xl mx-auto">
+      <div class="text-center mb-16 reveal">
+        <p class="label mb-4">Was wir anbieten</p>
+        <h2 class="text-4xl md:text-5xl font-bold text-gray-900">Unsere Leistungen</h2>
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+{_build_service_cards(services_data, primary)}
+      </div>
+      <div class="text-center mt-14">
+        <a href="angebot.html" class="btn-primary inline-block px-11 py-4 rounded-full text-base font-semibold shadow-lg">Alle Leistungen anfragen</a>
+      </div>
+    </div>
+  </section>"""
+        gallery_section = f"""
+  <section id="galerie" class="py-28 px-6 bg-white">
+    <div class="max-w-6xl mx-auto">
+      <div class="text-center mb-16 reveal">
+        <p class="label mb-4">Unsere Arbeit</p>
+        <h2 class="text-4xl md:text-5xl font-bold text-gray-900">Einblicke in unsere Projekte</h2>
+      </div>
+      <div class="grid grid-cols-2 md:grid-cols-3 gap-4">
+        <div class="aspect-video">{_gimg('image-07.jpg')}</div>
+        <div class="aspect-video">{_gimg('image-08.jpg')}</div>
+        <div class="aspect-video hidden md:block">{_gimg('image-09.jpg')}</div>
+        <div class="aspect-video">{_gimg('image-05.jpg')}</div>
+        <div class="aspect-video">{_gimg('image-10.jpg')}</div>
+        <div class="aspect-video hidden md:block">{_gimg('image-03.jpg')}</div>
+      </div>
+    </div>
+  </section>"""
+        testimonials_section = f"""
+  <section class="py-28 px-6 bg-gray-50">
+    <div class="max-w-6xl mx-auto">
+      <div class="text-center mb-16 reveal">
+        <p class="label mb-4">Kundenstimmen</p>
+        <h2 class="text-4xl md:text-5xl font-bold text-gray-900">Was unsere Kunden sagen</h2>
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+{_build_testimonial_cards(testimonials_data, primary)}
+      </div>
+    </div>
+  </section>"""
+        cta_section = f"""
+  <section class="py-24 px-6 text-center text-white relative overflow-hidden" style="background:{primary}">
+    <div class="absolute inset-0" style="background:url('image-01.jpg') center/cover;opacity:0.07;filter:grayscale(100%)"></div>
+    <div class="relative max-w-2xl mx-auto">
+      <p class="text-xs uppercase tracking-widest text-white/50 font-semibold mb-6">Kostenloses Erstgespräch</p>
+      <h2 class="text-5xl font-black mb-6 leading-tight">Bereit für Ihr Projekt?</h2>
+      <p class="text-lg opacity-75 leading-relaxed mb-10 max-w-lg mx-auto">Kontaktieren Sie uns — wir beraten Sie gerne unverbindlich und erstellen ein individuelles Angebot.</p>
+      <a href="angebot.html" class="bg-white inline-block px-12 py-5 rounded-full text-base font-bold hover:bg-gray-100 transition-all shadow-2xl" style="color:{primary}">Jetzt kostenlos anfragen</a>
+    </div>
+  </section>"""
+        footer_bg = "bg-gray-950"
+
+    elif variant == "classic":
+        hero_section_open = (
+            f'<section style="background-image:linear-gradient(180deg, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.72) 100%),'
+            f'url(\'image-01.jpg\');background-size:cover;background-position:center;min-height:100vh;'
+            f'position:relative;" class="flex flex-col items-center justify-center text-white text-center px-6">'
+        )
+        hero_inner_open = '<div class="max-w-4xl mx-auto">'
+        hero_label_cls = "label text-white/50 mb-5 block"
+        hero_h1_cls = "text-6xl md:text-8xl font-black leading-none tracking-tight mb-6"
+        hero_p1_cls = "text-2xl md:text-3xl font-light text-white/80 max-w-2xl mx-auto mb-4 leading-snug"
+        hero_p2_cls = "text-base md:text-lg font-light text-white/55 max-w-xl mx-auto mb-12 leading-relaxed"
+        hero_btn_cls = "flex flex-col sm:flex-row gap-4 justify-center"
+        stats_open_tag = '<div class="bg-gray-950 py-12 px-6">'
+        stats_close_tag = "</div>"
+        about_section = f"""
+  <section id="ueber-uns" class="py-28 px-6 bg-white">
+    <div class="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-16 items-center">
+      <div class="relative">
+        <img src="image-06.jpg" alt="Über {data.company_name}" class="w-full h-[300px] md:h-[440px] object-cover rounded-3xl shadow-2xl">
+        <div class="absolute -bottom-5 -right-5 text-white rounded-2xl px-8 py-5 shadow-xl" style="background:{primary}">
+          <p class="font-display text-5xl font-black leading-none">{years}+</p>
+          <p class="text-xs font-semibold mt-2 uppercase tracking-widest opacity-80">Jahre Erfahrung</p>
+        </div>
+      </div>
+      <div class="reveal">
+        <p class="label mb-4">Über uns</p>
+        <h2 class="text-4xl md:text-5xl font-bold text-gray-900 leading-tight mb-6">Ihre Experten<br>in {region}</h2>
+        <p class="text-gray-500 text-lg leading-relaxed mb-8">{about}</p>
+        <ul class="space-y-3.5 mb-10">{bullets_html}</ul>
+        <a href="angebot.html" class="btn-primary inline-block px-9 py-3.5 rounded-full text-sm font-semibold">Kontakt aufnehmen &rarr;</a>
+      </div>
+    </div>
+  </section>"""
+        services_section = f"""
+  <section id="leistungen" class="py-28 px-6 bg-gray-50">
+    <div class="max-w-6xl mx-auto">
+      <div class="text-center mb-16 reveal">
+        <p class="label mb-4">Was wir anbieten</p>
+        <h2 class="text-4xl md:text-5xl font-bold text-gray-900">Unsere Leistungen</h2>
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+{_build_service_cards(services_data, primary)}
+      </div>
+      <div class="text-center mt-14">
+        <a href="angebot.html" class="btn-primary inline-block px-11 py-4 rounded-full text-base font-semibold shadow-lg">Alle Leistungen anfragen</a>
+      </div>
+    </div>
+  </section>"""
+        gallery_section = f"""
+  <section id="galerie" class="py-28 px-6 bg-white">
+    <div class="max-w-6xl mx-auto">
+      <div class="text-center mb-16 reveal">
+        <p class="label mb-4">Unsere Arbeit</p>
+        <h2 class="text-4xl md:text-5xl font-bold text-gray-900">Einblicke in unsere Projekte</h2>
+      </div>
+      <div class="grid grid-cols-2 md:grid-cols-3 gap-4">
+        <div class="aspect-video">{_gimg('image-07.jpg')}</div>
+        <div class="aspect-video">{_gimg('image-08.jpg')}</div>
+        <div class="aspect-video hidden md:block">{_gimg('image-09.jpg')}</div>
+        <div class="aspect-video">{_gimg('image-05.jpg')}</div>
+        <div class="aspect-video">{_gimg('image-10.jpg')}</div>
+        <div class="aspect-video hidden md:block">{_gimg('image-03.jpg')}</div>
+      </div>
+    </div>
+  </section>"""
+        testimonials_section = f"""
+  <section class="py-28 px-6 bg-gray-50">
+    <div class="max-w-6xl mx-auto">
+      <div class="text-center mb-16 reveal">
+        <p class="label mb-4">Kundenstimmen</p>
+        <h2 class="text-4xl md:text-5xl font-bold text-gray-900">Was unsere Kunden sagen</h2>
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+{_build_testimonial_cards(testimonials_data, primary)}
+      </div>
+    </div>
+  </section>"""
+        cta_section = f"""
+  <section class="py-24 px-6 text-center text-white relative overflow-hidden" style="background:{primary}">
+    <div class="absolute inset-0" style="background:url('image-01.jpg') center/cover;opacity:0.07;filter:grayscale(100%)"></div>
+    <div class="relative max-w-2xl mx-auto">
+      <p class="text-xs uppercase tracking-widest text-white/50 font-semibold mb-6">Kostenloses Erstgespräch</p>
+      <h2 class="text-5xl font-black mb-6 leading-tight">Bereit für Ihr Projekt?</h2>
+      <p class="text-lg opacity-75 leading-relaxed mb-10 max-w-lg mx-auto">Kontaktieren Sie uns — wir beraten Sie gerne unverbindlich und erstellen ein individuelles Angebot.</p>
+      <a href="angebot.html" class="bg-white inline-block px-12 py-5 rounded-full text-base font-bold hover:bg-gray-100 transition-all shadow-2xl" style="color:{primary}">Jetzt kostenlos anfragen</a>
+    </div>
+  </section>"""
+        footer_bg = "bg-gray-950"
+
+    elif variant == "dark-pro":
+        hero_section_open = (
+            f'<section style="background-image:linear-gradient(135deg, rgba(5,5,20,0.92) 0%, rgba(5,5,20,0.65) 100%),'
+            f'url(\'image-01.jpg\');background-size:cover;background-position:center;min-height:100vh;'
+            f'position:relative;" class="flex flex-col justify-center text-white px-8 sm:px-20">'
+        )
+        hero_inner_open = '<div class="max-w-3xl">'
+        hero_label_cls = "label text-gray-400 mb-5 block"
+        hero_h1_cls = "text-5xl md:text-7xl font-black leading-none tracking-tight mb-6"
+        hero_p1_cls = "text-xl md:text-2xl font-light text-white/80 max-w-xl mb-4 leading-snug"
+        hero_p2_cls = "text-base font-light text-white/55 max-w-lg mb-12 leading-relaxed"
+        hero_btn_cls = "flex flex-col sm:flex-row gap-4"
+        stats_open_tag = '<div style="background:#050514" class="py-12 px-6">'
+        stats_close_tag = "</div>"
+        about_section = f"""
+  <section id="ueber-uns" class="py-28 px-6 bg-gray-950">
+    <div class="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-16 items-center">
+      <div class="relative md:order-last">
+        <img src="image-06.jpg" alt="Über {data.company_name}" class="w-full h-[300px] md:h-[440px] object-cover rounded-3xl shadow-2xl">
+        <div class="absolute -bottom-5 -right-5 text-white rounded-2xl px-8 py-5 shadow-xl" style="background:{primary}">
+          <p class="font-display text-5xl font-black leading-none">{years}+</p>
+          <p class="text-xs font-semibold mt-2 uppercase tracking-widest opacity-80">Jahre Erfahrung</p>
+        </div>
+      </div>
+      <div class="reveal">
+        <p class="label mb-4">Über uns</p>
+        <h2 class="text-4xl md:text-5xl font-bold text-white leading-tight mb-6">Ihre Experten<br>in {region}</h2>
+        <p class="text-gray-400 text-lg leading-relaxed mb-8">{about}</p>
+        <ul class="space-y-3.5 mb-10">{bullets_html}</ul>
+        <a href="angebot.html" class="btn-primary inline-block px-9 py-3.5 rounded-full text-sm font-semibold">Kontakt aufnehmen &rarr;</a>
+      </div>
+    </div>
+  </section>"""
+        services_section = f"""
+  <section id="leistungen" class="py-28 px-6 bg-gray-900">
+    <div class="max-w-6xl mx-auto">
+      <div class="text-center mb-16 reveal">
+        <p class="label mb-4">Was wir anbieten</p>
+        <h2 class="text-4xl md:text-5xl font-bold text-white">Unsere Leistungen</h2>
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+{_build_service_cards_dark(services_data, primary)}
+      </div>
+      <div class="text-center mt-14">
+        <a href="angebot.html" class="btn-primary inline-block px-11 py-4 rounded-full text-base font-semibold shadow-lg">Alle Leistungen anfragen</a>
+      </div>
+    </div>
+  </section>"""
+        _dark_gimg_hover_style = f"border-2 border-transparent hover:border-{primary} transition-all"
+        gallery_section = f"""
+  <section id="galerie" class="py-28 px-6 bg-gray-950">
+    <div class="max-w-6xl mx-auto">
+      <div class="text-center mb-16 reveal">
+        <p class="label mb-4">Unsere Arbeit</p>
+        <h2 class="text-4xl md:text-5xl font-bold text-white">Einblicke in unsere Projekte</h2>
+      </div>
+      <div class="grid grid-cols-2 md:grid-cols-3 gap-4">
+        <div class="aspect-video">{_gimg('image-07.jpg', 'rounded-2xl')}</div>
+        <div class="aspect-video">{_gimg('image-08.jpg', 'rounded-2xl')}</div>
+        <div class="aspect-video hidden md:block">{_gimg('image-09.jpg', 'rounded-2xl')}</div>
+        <div class="aspect-video">{_gimg('image-05.jpg', 'rounded-2xl')}</div>
+        <div class="aspect-video">{_gimg('image-10.jpg', 'rounded-2xl')}</div>
+        <div class="aspect-video hidden md:block">{_gimg('image-03.jpg', 'rounded-2xl')}</div>
+      </div>
+    </div>
+  </section>"""
+        testimonials_section = f"""
+  <section class="py-28 px-6 bg-gray-900">
+    <div class="max-w-6xl mx-auto">
+      <div class="text-center mb-16 reveal">
+        <p class="label mb-4">Kundenstimmen</p>
+        <h2 class="text-4xl md:text-5xl font-bold text-white">Was unsere Kunden sagen</h2>
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+{_build_testimonial_cards_dark(testimonials_data, primary)}
+      </div>
+    </div>
+  </section>"""
+        cta_section = f"""
+  <section class="py-24 px-6 text-center text-white relative overflow-hidden" style="background:{primary}">
+    <div class="absolute inset-0" style="background:url('image-01.jpg') center/cover;opacity:0.07;filter:grayscale(100%)"></div>
+    <div class="relative max-w-2xl mx-auto">
+      <p class="text-xs uppercase tracking-widest text-white/50 font-semibold mb-6">Kostenloses Erstgespräch</p>
+      <h2 class="text-5xl font-black mb-6 leading-tight">Bereit für Ihr Projekt?</h2>
+      <p class="text-lg opacity-75 leading-relaxed mb-10 max-w-lg mx-auto">Kontaktieren Sie uns — wir beraten Sie gerne unverbindlich und erstellen ein individuelles Angebot.</p>
+      <a href="angebot.html" class="bg-white inline-block px-12 py-5 rounded-full text-base font-bold hover:bg-gray-100 transition-all shadow-2xl" style="color:{primary}">Jetzt kostenlos anfragen</a>
+    </div>
+  </section>"""
+        footer_bg = "bg-black"
+
+    elif variant == "warm-luxury":
+        hero_section_open = (
+            f'<section style="background-image:linear-gradient(to bottom, rgba(40,15,5,0.55) 0%, rgba(0,0,0,0.75) 100%),'
+            f'url(\'image-01.jpg\');background-size:cover;background-position:center;min-height:100vh;'
+            f'position:relative;" class="flex flex-col items-center justify-center text-white text-center px-6">'
+        )
+        hero_inner_open = '<div class="max-w-4xl mx-auto">'
+        hero_label_cls = "label text-amber-300/70 mb-5 block"
+        hero_h1_cls = "text-5xl md:text-7xl font-black leading-none tracking-tight mb-6"
+        hero_p1_cls = "text-2xl md:text-3xl font-light text-white/80 max-w-2xl mx-auto mb-4 leading-snug"
+        hero_p2_cls = "text-base md:text-lg font-light text-white/55 max-w-xl mx-auto mb-12 leading-relaxed"
+        hero_btn_cls = "flex flex-col sm:flex-row gap-4 justify-center"
+        stats_open_tag = '<div style="background:linear-gradient(135deg,#7c2d12,#92400e)" class="py-12 px-6">'
+        stats_close_tag = "</div>"
+        about_section = f"""
+  <section id="ueber-uns" class="py-28 px-6 bg-amber-50">
+    <div class="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-16 items-center">
+      <div class="flex justify-center">
+        <div class="relative">
+          <img src="image-06.jpg" alt="Über {data.company_name}" class="w-72 h-72 md:w-96 md:h-96 object-cover rounded-full shadow-2xl border-8 border-white">
+          <div class="absolute -bottom-4 -right-4 text-white rounded-2xl px-6 py-4 shadow-xl" style="background:{primary}">
+            <p class="font-display text-4xl font-black leading-none">{years}+</p>
+            <p class="text-xs font-semibold mt-1 uppercase tracking-widest opacity-80">Jahre</p>
+          </div>
+        </div>
+      </div>
+      <div class="reveal">
+        <p class="label mb-4">Über uns</p>
+        <h2 class="text-4xl md:text-5xl font-bold text-gray-900 leading-tight mb-6">Ihre Experten<br>in {region}</h2>
+        <p class="text-gray-600 text-lg leading-relaxed mb-8">{about}</p>
+        <ul class="space-y-3.5 mb-10">{bullets_html}</ul>
+        <a href="angebot.html" class="btn-primary inline-block px-9 py-3.5 rounded-full text-sm font-semibold">Kontakt aufnehmen &rarr;</a>
+      </div>
+    </div>
+  </section>"""
+        services_section = f"""
+  <section id="leistungen" class="py-28 px-6 bg-white">
+    <div class="max-w-5xl mx-auto">
+      <div class="text-center mb-16 reveal">
+        <p class="label mb-4">Was wir anbieten</p>
+        <h2 class="text-4xl md:text-5xl font-bold text-gray-900">Unsere Leistungen</h2>
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-10">
+{_build_service_cards_2col(services_data, primary)}
+      </div>
+      <div class="text-center mt-14">
+        <a href="angebot.html" class="btn-primary inline-block px-11 py-4 rounded-full text-base font-semibold shadow-lg">Alle Leistungen anfragen</a>
+      </div>
+    </div>
+  </section>"""
+        gallery_section = f"""
+  <section id="galerie" class="py-28 px-6 bg-amber-50">
+    <div class="max-w-6xl mx-auto">
+      <div class="text-center mb-16 reveal">
+        <p class="label mb-4">Unsere Arbeit</p>
+        <h2 class="text-4xl md:text-5xl font-bold text-gray-900">Einblicke in unsere Projekte</h2>
+      </div>
+      <div class="grid grid-cols-2 md:grid-cols-3 gap-4">
+        <div class="row-span-2 rounded-3xl overflow-hidden reveal group relative">
+          <img src="image-07.jpg" alt="Projekt" class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700">
+          <div class="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300"><span class="text-white font-semibold text-sm tracking-wide">Projekt ansehen</span></div>
+        </div>
+        <div class="aspect-video">{_gimg('image-08.jpg', 'rounded-2xl')}</div>
+        <div class="aspect-video">{_gimg('image-09.jpg', 'rounded-2xl')}</div>
+        <div class="aspect-video">{_gimg('image-05.jpg', 'rounded-2xl')}</div>
+        <div class="aspect-video">{_gimg('image-10.jpg', 'rounded-2xl')}</div>
+      </div>
+    </div>
+  </section>"""
+        testimonials_section = f"""
+  <section class="py-28 px-6 bg-amber-50">
+    <div class="max-w-6xl mx-auto">
+      <div class="text-center mb-16 reveal">
+        <p class="label mb-4">Kundenstimmen</p>
+        <h2 class="text-4xl md:text-5xl font-bold text-gray-900">Was unsere Kunden sagen</h2>
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+{_build_testimonial_cards(testimonials_data, primary)}
+      </div>
+    </div>
+  </section>"""
+        cta_section = f"""
+  <section class="py-24 px-6 text-center text-white relative overflow-hidden bg-gray-900">
+    <div class="absolute inset-0" style="background:url('image-01.jpg') center/cover;opacity:0.07;filter:grayscale(100%)"></div>
+    <div class="relative max-w-2xl mx-auto">
+      <p class="text-xs uppercase tracking-widest text-amber-300/60 font-semibold mb-6">Kostenloses Erstgespräch</p>
+      <h2 class="text-5xl font-black mb-6 leading-tight">Bereit für Ihr Projekt?</h2>
+      <p class="text-lg opacity-75 leading-relaxed mb-10 max-w-lg mx-auto">Kontaktieren Sie uns — wir beraten Sie gerne unverbindlich und erstellen ein individuelles Angebot.</p>
+      <a href="angebot.html" class="bg-white inline-block px-12 py-5 rounded-full text-base font-bold hover:bg-amber-50 transition-all shadow-2xl" style="color:{primary}">Jetzt kostenlos anfragen</a>
+    </div>
+  </section>"""
+        footer_bg = "bg-gray-950"
+
+    elif variant == "split-hero":
+        # split-hero: hero is a side-by-side layout, no regular hero_section_open used
+        hero_section_open = ""  # unused — we build it manually below
+        hero_inner_open = ""
+        hero_label_cls = ""
+        hero_h1_cls = ""
+        hero_p1_cls = ""
+        hero_p2_cls = ""
+        hero_btn_cls = ""
+        stats_open_tag = f'<div style="background:{primary}" class="py-12 px-6">'
+        stats_close_tag = "</div>"
+        about_section = f"""
+  <section id="ueber-uns" class="py-28 px-6 bg-gray-50">
+    <div class="max-w-6xl mx-auto">
+      <div class="reveal bg-white rounded-3xl overflow-hidden shadow-lg">
+        <img src="image-06.jpg" alt="Über {data.company_name}" class="w-full h-64 object-cover">
+        <div class="p-10 md:p-14">
+          <p class="label mb-4">Über uns</p>
+          <h2 class="text-4xl md:text-5xl font-bold text-gray-900 leading-tight mb-6">Ihre Experten<br>in {region}</h2>
+          <p class="text-gray-500 text-lg leading-relaxed mb-8">{about}</p>
+          <ul class="space-y-3.5 mb-10">{bullets_html}</ul>
+          <a href="angebot.html" class="btn-primary inline-block px-9 py-3.5 rounded-full text-sm font-semibold">Kontakt aufnehmen &rarr;</a>
+        </div>
+      </div>
+    </div>
+  </section>"""
+        services_section = f"""
+  <section id="leistungen" class="py-28 px-6 bg-white">
+    <div class="max-w-5xl mx-auto">
+      <div class="text-center mb-16 reveal">
+        <p class="label mb-4">Was wir anbieten</p>
+        <h2 class="text-4xl md:text-5xl font-bold text-gray-900">Unsere Leistungen</h2>
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-10">
+{_build_service_cards_2col(services_data, primary)}
+      </div>
+      <div class="text-center mt-14">
+        <a href="angebot.html" class="btn-primary inline-block px-11 py-4 rounded-full text-base font-semibold shadow-lg">Alle Leistungen anfragen</a>
+      </div>
+    </div>
+  </section>"""
+        gallery_section = f"""
+  <section id="galerie" class="py-28 px-6 bg-gray-50">
+    <div class="max-w-6xl mx-auto">
+      <div class="text-center mb-16 reveal">
+        <p class="label mb-4">Unsere Arbeit</p>
+        <h2 class="text-4xl md:text-5xl font-bold text-gray-900">Einblicke in unsere Projekte</h2>
+      </div>
+      <div class="grid grid-cols-2 md:grid-cols-3 gap-4">
+        <div class="aspect-video">{_gimg('image-07.jpg', 'rounded-none')}</div>
+        <div class="aspect-video">{_gimg('image-08.jpg', 'rounded-none')}</div>
+        <div class="aspect-video hidden md:block">{_gimg('image-09.jpg', 'rounded-none')}</div>
+        <div class="aspect-video">{_gimg('image-05.jpg', 'rounded-none')}</div>
+        <div class="aspect-video">{_gimg('image-10.jpg', 'rounded-none')}</div>
+        <div class="aspect-video hidden md:block">{_gimg('image-03.jpg', 'rounded-none')}</div>
+      </div>
+    </div>
+  </section>"""
+        testimonials_section = f"""
+  <section class="py-28 px-6 bg-white">
+    <div class="max-w-6xl mx-auto">
+      <div class="text-center mb-16 reveal">
+        <p class="label mb-4">Kundenstimmen</p>
+        <h2 class="text-4xl md:text-5xl font-bold text-gray-900">Was unsere Kunden sagen</h2>
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+{_build_testimonial_cards(testimonials_data, primary)}
+      </div>
+    </div>
+  </section>"""
+        cta_section = f"""
+  <section class="py-24 px-6 text-white" style="background:{primary}">
+    <div class="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-12 items-center">
+      <div>
+        <p class="text-xs uppercase tracking-widest text-white/50 font-semibold mb-4">Kostenloses Erstgespräch</p>
+        <h2 class="text-4xl md:text-5xl font-black mb-4 leading-tight">Bereit für Ihr Projekt?</h2>
+        <p class="text-lg opacity-75 leading-relaxed mb-8">Kontaktieren Sie uns — wir beraten Sie gerne unverbindlich und erstellen ein individuelles Angebot.</p>
+        <a href="angebot.html" class="bg-white inline-block px-10 py-4 rounded-full text-base font-bold hover:bg-gray-100 transition-all shadow-2xl" style="color:{primary}">Jetzt kostenlos anfragen</a>
+      </div>
+      <div class="bg-white/10 rounded-3xl p-8">
+        <h3 class="text-xl font-bold mb-6">Kontaktieren Sie uns</h3>
+        <div class="space-y-3 text-sm text-white/80">
+          <p>{address}</p>
+          <p><a href="tel:{phone_link}" class="underline hover:text-white">{phone}</a></p>
+          <p><a href="mailto:{email}" class="underline hover:text-white">{email}</a></p>
+        </div>
+      </div>
+    </div>
+  </section>"""
+        footer_bg = "bg-gray-950"
+
+    else:  # minimal-light
+        hero_section_open = (
+            f'<section style="background-image:linear-gradient(to bottom, rgba(0,0,0,0.30) 0%, rgba(0,0,0,0.60) 100%),'
+            f'url(\'image-01.jpg\');background-size:cover;background-position:center;min-height:100vh;'
+            f'position:relative;" class="flex flex-col items-center justify-center text-white text-center px-6">'
+        )
+        hero_inner_open = '<div class="max-w-4xl mx-auto">'
+        hero_label_cls = "label text-white/50 mb-5 block"
+        hero_h1_cls = "text-5xl md:text-7xl font-black leading-none tracking-tight mb-6"
+        hero_p1_cls = "text-2xl md:text-3xl font-light text-white/80 max-w-2xl mx-auto mb-4 leading-snug"
+        hero_p2_cls = "text-base md:text-lg font-light text-white/55 max-w-xl mx-auto mb-12 leading-relaxed"
+        hero_btn_cls = "flex flex-col sm:flex-row gap-4 justify-center"
+        stats_open_tag = ""   # no stats bar — shown inline in about
+        stats_close_tag = ""
+        # build inline stats boxes for about section
+        stats_boxes = ""
+        for s in stats_data[:3]:
+            stats_boxes += (
+                f'<div class="text-center p-4 border border-gray-200 rounded-xl">'
+                f'<p class="font-display text-3xl font-black" style="color:{primary}">{s["number"]}</p>'
+                f'<p class="text-gray-500 text-xs mt-1 uppercase tracking-widest">{s["label"]}</p>'
+                f'</div>'
+            )
+        about_section = f"""
+  <section id="ueber-uns" class="py-28 px-6 bg-white">
+    <div class="max-w-6xl mx-auto">
+      <div class="reveal mb-12">
+        <p class="label mb-4">Über uns</p>
+        <h2 class="text-4xl md:text-5xl font-bold text-gray-900 leading-tight mb-6">Ihre Experten<br>in {region}</h2>
+        <p class="text-gray-500 text-lg leading-relaxed mb-8 max-w-3xl">{about}</p>
+        <ul class="space-y-3.5 mb-10">{bullets_html}</ul>
+        <a href="angebot.html" class="btn-primary inline-block px-9 py-3.5 rounded-full text-sm font-semibold">Kontakt aufnehmen &rarr;</a>
+      </div>
+      <div class="grid grid-cols-3 gap-4 mt-10">
+        {stats_boxes}
+      </div>
+    </div>
+  </section>"""
+        services_section = f"""
+  <section id="leistungen" class="py-0 bg-gray-50">
+    <div class="max-w-6xl mx-auto">
+      <div class="text-center py-16 px-6 reveal">
+        <p class="label mb-4">Was wir anbieten</p>
+        <h2 class="text-4xl md:text-5xl font-bold text-gray-900">Unsere Leistungen</h2>
+      </div>
+{_build_service_rows_minimal(services_data, primary)}
+      <div class="text-center py-14">
+        <a href="angebot.html" class="btn-primary inline-block px-11 py-4 rounded-full text-base font-semibold shadow-lg">Alle Leistungen anfragen</a>
+      </div>
+    </div>
+  </section>"""
+        gallery_section = f"""
+  <section id="galerie" class="py-28 px-6 bg-white">
+    <div class="max-w-6xl mx-auto">
+      <div class="text-center mb-16 reveal">
+        <p class="label mb-4">Unsere Arbeit</p>
+        <h2 class="text-4xl md:text-5xl font-bold text-gray-900">Einblicke in unsere Projekte</h2>
+      </div>
+      <div class="grid grid-cols-2 md:grid-cols-3 gap-0.5">
+        <div class="aspect-video">{_gimg('image-07.jpg', 'rounded-none')}</div>
+        <div class="aspect-video">{_gimg('image-08.jpg', 'rounded-none')}</div>
+        <div class="aspect-video hidden md:block">{_gimg('image-09.jpg', 'rounded-none')}</div>
+        <div class="aspect-video">{_gimg('image-05.jpg', 'rounded-none')}</div>
+        <div class="aspect-video">{_gimg('image-10.jpg', 'rounded-none')}</div>
+        <div class="aspect-video hidden md:block">{_gimg('image-03.jpg', 'rounded-none')}</div>
+      </div>
+    </div>
+  </section>"""
+        testimonials_section = f"""
+  <section class="py-28 px-6 bg-white">
+    <div class="max-w-6xl mx-auto">
+      <div class="text-center mb-16 reveal">
+        <p class="label mb-4">Kundenstimmen</p>
+        <h2 class="text-4xl md:text-5xl font-bold text-gray-900">Was unsere Kunden sagen</h2>
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+{_build_testimonial_cards_border(testimonials_data, primary)}
+      </div>
+    </div>
+  </section>"""
+        cta_section = f"""
+  <section class="py-24 px-6 text-center bg-gray-50">
+    <div class="max-w-2xl mx-auto">
+      <p class="text-xs uppercase tracking-widest font-semibold mb-6" style="color:{primary}">Kostenloses Erstgespräch</p>
+      <h2 class="text-5xl font-black mb-6 leading-tight text-gray-900">Bereit für Ihr Projekt?</h2>
+      <p class="text-lg text-gray-500 leading-relaxed mb-10 max-w-lg mx-auto">Kontaktieren Sie uns — wir beraten Sie gerne unverbindlich und erstellen ein individuelles Angebot.</p>
+      <a href="angebot.html" class="btn-primary inline-block px-12 py-5 rounded-full text-base font-bold shadow-xl">Jetzt kostenlos anfragen</a>
+    </div>
+  </section>"""
+        footer_bg = "bg-gray-950"
+
+    # ── Build hero HTML (split-hero variant has a completely different hero) ─
+    if variant == "split-hero":
+        hero_html = f"""
+  <!-- ── HERO (SPLIT) ── -->
+  <section style="min-height:100vh;display:grid;grid-template-columns:1fr 1fr" class="relative">
+    <div class="flex flex-col justify-center px-16 py-32" style="background:#0f0f0f">
+      <p class="label text-gray-400 mb-5">{data.industry} &bull; {region}</p>
+      <h1 class="text-5xl md:text-6xl font-black leading-none tracking-tight mb-6 text-white">{data.company_name}</h1>
+      <p class="text-xl font-light text-white/80 max-w-md mb-4 leading-snug">{slogan}</p>
+      <p class="text-base font-light text-white/55 max-w-md mb-12 leading-relaxed">{hero_subtitle}</p>
+      <div class="flex flex-col sm:flex-row gap-4">
+        <a href="angebot.html" class="btn-primary px-10 py-4 rounded-full text-base font-semibold shadow-2xl">Kostenlos anfragen</a>
+        <a href="#leistungen" class="border border-white/30 bg-white/10 text-white px-10 py-4 rounded-full text-base font-semibold hover:bg-white/20 transition-all">Unsere Leistungen</a>
+      </div>
+    </div>
+    <div style="background:url('image-01.jpg') center/cover no-repeat"></div>
+  </section>"""
+    else:
+        hero_html = f"""
+  <!-- ── HERO ── -->
+  {hero_section_open}
+    {hero_inner_open}
+      <p class="{hero_label_cls}">{data.industry} &bull; {region}</p>
+      <h1 class="{hero_h1_cls}">{data.company_name}</h1>
+      <p class="{hero_p1_cls}">{slogan}</p>
+      <p class="{hero_p2_cls}">{hero_subtitle}</p>
+      <div class="{hero_btn_cls}">
+        <a href="angebot.html" class="btn-primary px-11 py-4 rounded-full text-base font-semibold shadow-2xl">Kostenlos anfragen</a>
+        <a href="#leistungen" class="border border-white/30 bg-white/10 backdrop-blur-sm text-white px-11 py-4 rounded-full text-base font-semibold hover:bg-white/20 transition-all">Unsere Leistungen</a>
+      </div>
+    </div>
+    <div class="absolute bottom-8 left-1/2 -translate-x-1/2 animate-bounce">
+      <svg class="w-5 h-5 text-white/35" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+      </svg>
+    </div>
+  </section>"""
+
+    # stats bar (minimal-light has no bar)
+    if stats_open_tag:
+        stats_bar_html = f"""
+  <!-- ── STATS BAR ── -->
+  {stats_open_tag}
+    <div class="max-w-3xl mx-auto grid grid-cols-3 gap-4 text-center">
+      {stats_html}
+    </div>
+  {stats_close_tag}"""
+    else:
+        stats_bar_html = ""
+
+    # body class: dark-pro uses dark bg
+    body_cls = "bg-gray-950" if variant == "dark-pro" else "bg-white"
+
+    # CSS hero-bg: not used when hero_section_open is a style= block,
+    # but keep for nav-only reference
+    hero_css_extra = ""
+    if variant == "dark-pro":
+        hero_css_extra = "body { color: #e5e7eb; }"
 
     return f"""<!DOCTYPE html>
 <html lang="de">
@@ -628,35 +1485,28 @@ def _build_index_html(data, content: dict, primary: str, primary_dark: str) -> s
     html {{ scroll-behavior: smooth; }}
     body {{ font-family: 'Inter', system-ui, -apple-system, Arial, sans-serif; -webkit-font-smoothing: antialiased; color: #1f2937; }}
     h1, h2, h3, .font-display {{ font-family: 'Playfair Display', Georgia, 'Times New Roman', serif; }}
-    /* Primary color utilities */
     .text-primary {{ color: {primary}; }}
     .bg-primary {{ background-color: {primary}; }}
     .btn-primary {{ background-color: {primary}; color: #fff; transition: background 0.2s, transform 0.2s, box-shadow 0.2s; }}
     .btn-primary:hover {{ background-color: {primary_dark}; transform: translateY(-2px); box-shadow: 0 12px 28px rgba(0,0,0,0.22); }}
-    /* Hero */
-    .hero-bg {{
-      background: linear-gradient(135deg, rgba(0,0,0,0.68) 0%, rgba(0,0,0,0.38) 100%),
-                  url('image-01.jpg') center / cover no-repeat;
-      min-height: 100vh;
-      position: relative;
-    }}
-    /* Nav — starts with subtle dark glass, turns white on scroll */
     #nav {{ background: rgba(0,0,0,0.35); backdrop-filter: blur(8px); transition: background 0.35s, box-shadow 0.35s; }}
     #nav.scrolled {{ background: rgba(255,255,255,0.97); backdrop-filter: blur(14px); box-shadow: 0 2px 24px rgba(0,0,0,0.08); }}
-    /* Section label */
     .label {{ font-size: 0.68rem; letter-spacing: 0.2em; text-transform: uppercase; font-weight: 700; color: {primary}; }}
-    /* Service / testimonial cards */
     .card {{ transition: transform 0.3s ease, box-shadow 0.3s ease; }}
     .card:hover {{ transform: translateY(-8px); box-shadow: 0 28px 52px rgba(0,0,0,0.11); }}
-    /* Animations */
+    /* Scroll-triggered animations */
+    .reveal {{ opacity: 0; transform: translateY(28px); transition: opacity 0.65s ease, transform 0.65s ease; }}
+    .reveal.visible {{ opacity: 1; transform: none; }}
+    /* Hero entry animations */
     @keyframes up {{ from {{ opacity:0; transform:translateY(32px); }} to {{ opacity:1; transform:translateY(0); }} }}
     .a1 {{ animation: up 0.7s ease 0.1s both; }}
     .a2 {{ animation: up 0.7s ease 0.3s both; }}
     .a3 {{ animation: up 0.7s ease 0.5s both; }}
     .a4 {{ animation: up 0.7s ease 0.7s both; }}
+    {hero_css_extra}
   </style>
 </head>
-<body class="bg-white">
+<body class="{body_cls}">
 
   <!-- ── NAVIGATION ── -->
   <nav id="nav" class="fixed top-0 inset-x-0 z-50 py-4 px-6">
@@ -672,14 +1522,12 @@ def _build_index_html(data, content: dict, primary: str, primary_dark: str) -> s
         <a href="#kontakt" class="nav-lnk text-white/80 hover:text-white text-sm font-medium transition-colors">Kontakt</a>
         <a href="angebot.html" class="btn-primary px-6 py-2.5 rounded-full text-sm font-semibold shadow-md">Anfragen</a>
       </div>
-      <!-- Hamburger button (mobile only) -->
       <button id="menu-btn" class="md:hidden flex flex-col gap-1.5 p-2 ml-2" aria-label="Menü öffnen" aria-expanded="false">
         <span id="hb1" class="block w-6 h-0.5 bg-white transition-all duration-300 origin-center"></span>
         <span id="hb2" class="block w-6 h-0.5 bg-white transition-all duration-300"></span>
         <span id="hb3" class="block w-6 h-0.5 bg-white transition-all duration-300 origin-center"></span>
       </button>
     </div>
-    <!-- Mobile dropdown menu -->
     <div id="mobile-menu" class="md:hidden hidden bg-white rounded-2xl shadow-xl mt-3 mx-0 px-6 py-5 space-y-1">
       <a href="#ueber-uns" class="mobile-nav-lnk block text-gray-700 hover:text-gray-900 font-medium py-2.5 border-b border-gray-100">Über uns</a>
       <a href="#leistungen" class="mobile-nav-lnk block text-gray-700 hover:text-gray-900 font-medium py-2.5 border-b border-gray-100">Leistungen</a>
@@ -689,146 +1537,33 @@ def _build_index_html(data, content: dict, primary: str, primary_dark: str) -> s
     </div>
   </nav>
 
-  <!-- ── HERO ── -->
-  <section class="{hero_section_cls}">
-    <div class="{hero_inner_cls}">
-      <p class="a1 label text-white/50 mb-5">{data.industry} &bull; {region}</p>
-      <h1 class="{hero_h1_cls}">{data.company_name}</h1>
-      <p class="{hero_slogan_cls}">{slogan}</p>
-      <p class="{hero_sub_cls}">{hero_subtitle}</p>
-      <div class="{hero_btn_cls}">
-        <a href="angebot.html" class="btn-primary px-11 py-4 rounded-full text-base font-semibold shadow-2xl">
-          Kostenlos anfragen
-        </a>
-        <a href="#leistungen" class="border border-white/30 bg-white/10 backdrop-blur-sm text-white px-11 py-4 rounded-full text-base font-semibold hover:bg-white/20 transition-all">
-          Unsere Leistungen
-        </a>
-      </div>
-    </div>
-    <div class="absolute bottom-8 left-1/2 -translate-x-1/2 animate-bounce">
-      <svg class="w-5 h-5 text-white/35" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
-      </svg>
-    </div>
-  </section>
+  {hero_html}
 
-  <!-- ── STATS BAR ── -->
-  {stats_open}
-    <div class="max-w-3xl mx-auto grid grid-cols-3 gap-4 text-center">
-      {stats_html}
-    </div>
-  </div>
+  {stats_bar_html}
 
-  <!-- ── ABOUT ── -->
-  <section id="ueber-uns" class="py-28 px-6 bg-white">
-    <div class="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-16 items-center">
-      <!-- Image column -->
-      <div class="relative {about_img_cls}">
-        <img src="image-06.jpg" alt="Über {data.company_name}" class="w-full h-[300px] md:h-[440px] object-cover rounded-3xl shadow-2xl">
-        <div class="absolute -bottom-5 -right-5 text-white rounded-2xl px-8 py-5 shadow-xl" style="background:{primary}">
-          <p class="font-display text-5xl font-black leading-none">{years}+</p>
-          <p class="text-xs font-semibold mt-2 uppercase tracking-widest opacity-80">Jahre Erfahrung</p>
-        </div>
-      </div>
-      <!-- Text column -->
-      <div class="{about_txt_cls}">
-        <p class="label mb-4">Über uns</p>
-        <h2 class="text-4xl md:text-5xl font-bold text-gray-900 leading-tight mb-6">
-          Ihre Experten<br>in {region}
-        </h2>
-        <p class="text-gray-500 text-lg leading-relaxed mb-8">{about}</p>
-        <ul class="space-y-3.5 mb-10">
-          {bullets_html}
-        </ul>
-        <a href="angebot.html" class="btn-primary inline-block px-9 py-3.5 rounded-full text-sm font-semibold">
-          Kontakt aufnehmen &rarr;
-        </a>
-      </div>
-    </div>
-  </section>
+  {about_section}
 
-  <!-- ── SERVICES ── -->
-  <section id="leistungen" class="py-28 px-6 bg-gray-50">
-    <div class="max-w-6xl mx-auto">
-      <div class="text-center mb-16">
-        <p class="label mb-4">Was wir anbieten</p>
-        <h2 class="text-4xl md:text-5xl font-bold text-gray-900">Unsere Leistungen</h2>
-      </div>
-      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-{service_cards}
-      </div>
-      <div class="text-center mt-14">
-        <a href="angebot.html" class="btn-primary inline-block px-11 py-4 rounded-full text-base font-semibold shadow-lg">
-          Alle Leistungen anfragen
-        </a>
-      </div>
-    </div>
-  </section>
+  {services_section}
 
   {extra_sections_html}
 
-  <!-- ── GALLERY ── -->
-  <section id="galerie" class="py-28 px-6 bg-white">
-    <div class="max-w-6xl mx-auto">
-      <div class="text-center mb-16">
-        <p class="label mb-4">Unsere Arbeit</p>
-        <h2 class="text-4xl md:text-5xl font-bold text-gray-900">Einblicke in unsere Projekte</h2>
-      </div>
-      <!-- Uniform gallery grid: 2 columns on mobile, 3 on desktop, 16:9 aspect ratio -->
-      <div class="grid grid-cols-2 md:grid-cols-3 gap-4">
-        <div class="aspect-video overflow-hidden rounded-2xl shadow-sm hover:shadow-md hover:scale-[1.02] transition-all duration-300"><img src="image-07.jpg" alt="Projekt" class="w-full h-full object-cover"></div>
-        <div class="aspect-video overflow-hidden rounded-2xl shadow-sm hover:shadow-md hover:scale-[1.02] transition-all duration-300"><img src="image-08.jpg" alt="Projekt" class="w-full h-full object-cover"></div>
-        <div class="aspect-video overflow-hidden rounded-2xl shadow-sm hover:shadow-md hover:scale-[1.02] transition-all duration-300 hidden md:block"><img src="image-09.jpg" alt="Projekt" class="w-full h-full object-cover"></div>
-        <div class="aspect-video overflow-hidden rounded-2xl shadow-sm hover:shadow-md hover:scale-[1.02] transition-all duration-300"><img src="image-05.jpg" alt="Projekt" class="w-full h-full object-cover"></div>
-        <div class="aspect-video overflow-hidden rounded-2xl shadow-sm hover:shadow-md hover:scale-[1.02] transition-all duration-300"><img src="image-10.jpg" alt="Projekt" class="w-full h-full object-cover"></div>
-        <div class="aspect-video overflow-hidden rounded-2xl shadow-sm hover:shadow-md hover:scale-[1.02] transition-all duration-300 hidden md:block"><img src="image-03.jpg" alt="Projekt" class="w-full h-full object-cover"></div>
-      </div>
-    </div>
-  </section>
+  {gallery_section}
 
-  <!-- ── TESTIMONIALS ── -->
-  <section class="py-28 px-6 bg-gray-50">
-    <div class="max-w-6xl mx-auto">
-      <div class="text-center mb-16">
-        <p class="label mb-4">Kundenstimmen</p>
-        <h2 class="text-4xl md:text-5xl font-bold text-gray-900">Was unsere Kunden sagen</h2>
-      </div>
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
-{testimonial_cards}
-      </div>
-    </div>
-  </section>
+  {testimonials_section}
 
-  <!-- ── CTA BANNER ── -->
-  <section class="py-24 px-6 text-center text-white relative overflow-hidden" style="background:{primary}">
-    <div class="absolute inset-0" style="background:url('image-01.jpg') center/cover;opacity:0.07;filter:grayscale(100%)"></div>
-    <div class="relative max-w-2xl mx-auto">
-      <p class="text-xs uppercase tracking-widest text-white/50 font-semibold mb-6">Kostenloses Erstgespräch</p>
-      <h2 class="text-5xl font-black mb-6 leading-tight">Bereit für Ihr Projekt?</h2>
-      <p class="text-lg opacity-75 leading-relaxed mb-10 max-w-lg mx-auto">
-        Kontaktieren Sie uns — wir beraten Sie gerne unverbindlich und erstellen ein individuelles Angebot.
-      </p>
-      <a href="angebot.html" class="bg-white inline-block px-12 py-5 rounded-full text-base font-bold hover:bg-gray-100 transition-all shadow-2xl" style="color:{primary}">
-        Jetzt kostenlos anfragen
-      </a>
-    </div>
-  </section>
+  {cta_section}
 
   <!-- ── FOOTER ── -->
-  <footer id="kontakt" class="bg-gray-950 text-gray-400 pt-16 pb-8 px-6">
+  <footer id="kontakt" class="{footer_bg} text-gray-400 pt-16 pb-8 px-6">
     <div class="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-4 gap-10 pb-12 border-b border-gray-800/60">
-      <!-- Brand -->
       <div class="md:col-span-2">
         <div class="flex items-center gap-3 mb-4">
           {logo_footer}
           <span class="font-display text-lg font-bold text-white">{data.company_name}</span>
         </div>
         <p class="text-sm text-gray-500 leading-relaxed max-w-xs mb-6">{slogan}</p>
-        <a href="angebot.html" class="btn-primary inline-block text-xs px-5 py-2.5 rounded-full font-semibold">
-          Website anfragen
-        </a>
+        <a href="angebot.html" class="btn-primary inline-block text-xs px-5 py-2.5 rounded-full font-semibold">Website anfragen</a>
       </div>
-      <!-- Links -->
       <div>
         <h4 class="text-white font-semibold text-sm mb-5">Navigation</h4>
         <ul class="space-y-3 text-sm">
@@ -839,7 +1574,6 @@ def _build_index_html(data, content: dict, primary: str, primary_dark: str) -> s
           <li><a href="impressum.html" class="hover:text-white transition-colors">Impressum</a></li>
         </ul>
       </div>
-      <!-- Contact -->
       <div>
         <h4 class="text-white font-semibold text-sm mb-5">Kontakt</h4>
         <ul class="space-y-3 text-sm">
@@ -855,7 +1589,11 @@ def _build_index_html(data, content: dict, primary: str, primary_dark: str) -> s
     </div>
   </footer>
 
-  <!-- Nav scroll behaviour + hamburger toggle -->
+  <!-- Floating mobile CTA -->
+  <a href="angebot.html" id="float-cta" class="md:hidden fixed bottom-6 right-6 z-50 text-white text-sm font-bold px-6 py-3.5 rounded-full shadow-2xl" style="background:{primary}">
+    Jetzt anfragen &rarr;
+  </a>
+
   <script>
     (function () {{
       var nav = document.getElementById('nav');
@@ -905,6 +1643,22 @@ def _build_index_html(data, content: dict, primary: str, primary_dark: str) -> s
       }});
 
       window.addEventListener('scroll', update, {{ passive: true }});
+
+      /* Scroll-triggered reveal */
+      var io = new IntersectionObserver(function(entries) {{
+        entries.forEach(function(e) {{ if (e.isIntersecting) {{ e.target.classList.add('visible'); io.unobserve(e.target); }} }});
+      }}, {{ threshold: 0.12 }});
+      document.querySelectorAll('.reveal').forEach(function(el) {{ io.observe(el); }});
+
+      /* Hide floating CTA when contact section visible */
+      var floatCta = document.getElementById('float-cta');
+      var kontaktEl = document.getElementById('kontakt');
+      if (floatCta && kontaktEl) {{
+        var ctaObs = new IntersectionObserver(function(entries) {{
+          entries.forEach(function(e) {{ floatCta.style.display = e.isIntersecting ? 'none' : ''; }});
+        }});
+        ctaObs.observe(kontaktEl);
+      }}
     }})();
   </script>
 </body>
