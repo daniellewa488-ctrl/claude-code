@@ -1,8 +1,14 @@
+import io
 import time
 import random
 import requests
 from urllib.parse import quote
 from dataclasses import dataclass, field
+try:
+    from PIL import Image as _PILImage
+    _PILLOW_OK = True
+except ImportError:
+    _PILLOW_OK = False
 
 POLLINATIONS_BASE = "https://image.pollinations.ai/prompt"
 TIMEOUT = 90  # increased timeout for slower free model
@@ -33,6 +39,21 @@ def _build_prompts(company: str, industry: str, region: str, style: str) -> list
         f"team of {industry} professionals consulting with homeowner in {region}, {style_hint}, no text, photorealistic",
         f"{industry} showcase, completed project by {co}, premium quality, {style_hint}, clean composition, no text",
     ]
+
+
+def _is_quality_image(img_bytes: bytes, min_width: int = 400, min_height: int = 280) -> bool:
+    """Return True if image meets minimum pixel dimensions for use on the website."""
+    if not _PILLOW_OK:
+        return len(img_bytes) > 20000  # fallback: file size proxy
+    try:
+        img = _PILImage.open(io.BytesIO(img_bytes))
+        w, h = img.size
+        if w < min_width or h < min_height:
+            print(f"[image_generator] Quality reject: {w}x{h} < {min_width}x{min_height}")
+            return False
+        return True
+    except Exception:
+        return False
 
 
 def _download(url: str) -> bytes:
@@ -66,11 +87,12 @@ def generate(data, crawled=None) -> GeneratedImages:
         try:
             print(f"[image_generator] Downloading company image → {filename}: {img_url}")
             img_bytes = _download(img_url)
-            if len(img_bytes) > 5000:
+            if _is_quality_image(img_bytes):
                 result.images[filename] = img_bytes
                 company_slots += 1
+                print(f"[image_generator] Accepted company image {filename}")
             else:
-                print(f"[image_generator] Too small ({len(img_bytes)} bytes), skipping")
+                print(f"[image_generator] Rejected low-quality company image, will use AI instead")
         except Exception as e:
             print(f"[image_generator] Failed company image {img_url}: {e}")
 
