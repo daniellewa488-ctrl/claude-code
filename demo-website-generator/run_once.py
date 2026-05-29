@@ -70,20 +70,29 @@ def main():
     print("[run_once] Checking inbox for Workflow emails...")
     emails = email_reader.fetch_new()
     print(f"[run_once] Found {len(emails)} new Workflow email(s).")
-    for raw_email in emails:
-        company_name = ""
-        data = None
+
+    if not emails:
+        return
+
+    # Process ONE email per run — the next scheduled run picks up the rest.
+    # This guarantees complete data isolation between companies.
+    raw_email = emails[0]
+    if len(emails) > 1:
+        print(f"[run_once] {len(emails) - 1} additional email(s) will be processed in the next run.")
+
+    company_name = ""
+    data = None
+    try:
+        data = email_parser.parse(raw_email)
+        company_name = data.company_name
+        process_email(raw_email, data=data)
+    except Exception as exc:
+        tb = traceback.format_exc()
+        print(f"[run_once] ERROR processing email:\n{tb}")
         try:
-            data = email_parser.parse(raw_email)
-            company_name = data.company_name
-            process_email(raw_email, data=data)
-        except Exception as exc:
-            tb = traceback.format_exc()
-            print(f"[run_once] ERROR processing email:\n{tb}")
-            try:
-                error_notifier.send(company_name, str(exc), tb)
-            except Exception as notify_err:
-                print(f"[run_once] Could not send error notification: {notify_err}")
+            error_notifier.send(company_name, str(exc), tb)
+        except Exception as notify_err:
+            print(f"[run_once] Could not send error notification: {notify_err}")
 
 
 if __name__ == "__main__":
