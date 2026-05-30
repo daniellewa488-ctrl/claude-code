@@ -418,8 +418,8 @@ def _build_service_cards(services: list, primary: str) -> str:
                 '</ul>'
             )
         cards.append(f"""        <div class="group bg-white rounded-2xl overflow-hidden shadow-md border border-gray-100 hover:-translate-y-1 hover:shadow-xl transition-all duration-300">
-          <div class="aspect-video overflow-hidden">
-            <img src="{img}" alt="{svc['name']}" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500">
+          <div class="image-wrapper service overflow-hidden">
+            <img src="{img}" alt="{svc['name']}" class="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-500" loading="lazy">
           </div>
           <div class="p-6">
             <h3 class="font-display text-xl font-bold text-gray-900 mb-2">{svc['name']}</h3>
@@ -581,9 +581,9 @@ def _build_service_cards_dark(services: list, primary: str) -> str:
         cards.append(
             f'        <div class="group bg-gray-800 border border-gray-700 rounded-2xl overflow-hidden'
             f' hover:-translate-y-1 hover:shadow-2xl transition-all duration-300">'
-            f'<div class="aspect-video overflow-hidden">'
-            f'<img src="{img}" alt="{svc["name"]}" class="w-full h-full object-cover'
-            f' group-hover:scale-105 transition-transform duration-500"></div>'
+            f'<div class="image-wrapper service" style="border-radius:0">'
+            f'<img src="{img}" alt="{svc["name"]}" class="w-full h-full object-cover object-center'
+            f' group-hover:scale-105 transition-transform duration-500" loading="lazy"></div>'
             f'<div class="p-6">'
             f'<h3 class="font-display text-xl font-bold text-white mb-2">{svc["name"]}</h3>'
             f'<p class="text-gray-400 text-sm leading-relaxed">{svc["description"]}</p>'
@@ -615,7 +615,7 @@ def _build_service_rows_minimal(services: list, primary: str) -> str:
                 ) +
                 '</ul>'
             )
-        img_col = f'<div class="aspect-video md:aspect-auto overflow-hidden"><img src="{img}" alt="{svc["name"]}" class="w-full h-full object-cover"></div>'
+        img_col = f'<div class="image-wrapper service md:rounded-none" style="border-radius:0"><img src="{img}" alt="{svc["name"]}" class="w-full h-full object-cover object-center" loading="lazy"></div>'
         txt_col = (
             f'<div class="p-10 flex flex-col justify-center bg-white">'
             f'<h3 class="font-display text-2xl font-bold text-gray-900 mb-3">{svc["name"]}</h3>'
@@ -831,13 +831,13 @@ def _build_index_html(data, content: dict, primary: str, primary_dark: str) -> s
         <p class="label mb-4">Unsere Arbeit</p>
         <h2 class="text-4xl md:text-5xl font-bold text-gray-900">Einblicke in unsere Projekte</h2>
       </div>
-      <div class="grid grid-cols-2 md:grid-cols-3 gap-4">
-        <div class="aspect-video">{_gimg('image-07.jpg')}</div>
-        <div class="aspect-video">{_gimg('image-08.jpg')}</div>
-        <div class="aspect-video hidden md:block">{_gimg('image-09.jpg')}</div>
-        <div class="aspect-video">{_gimg('image-05.jpg')}</div>
-        <div class="aspect-video">{_gimg('image-10.jpg')}</div>
-        <div class="aspect-video hidden md:block">{_gimg('image-03.jpg')}</div>
+      <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-8">
+        <div class="image-wrapper gallery">{_gimg('image-07.jpg')}</div>
+        <div class="image-wrapper gallery">{_gimg('image-08.jpg')}</div>
+        <div class="image-wrapper gallery hidden md:block">{_gimg('image-09.jpg')}</div>
+        <div class="image-wrapper gallery">{_gimg('image-05.jpg')}</div>
+        <div class="image-wrapper gallery">{_gimg('image-10.jpg')}</div>
+        <div class="image-wrapper gallery hidden md:block">{_gimg('image-03.jpg')}</div>
       </div>
     </div>
   </section>"""
@@ -922,13 +922,13 @@ def _build_index_html(data, content: dict, primary: str, primary_dark: str) -> s
         <p class="label mb-4">Unsere Arbeit</p>
         <h2 class="text-4xl md:text-5xl font-bold text-gray-900">Einblicke in unsere Projekte</h2>
       </div>
-      <div class="grid grid-cols-2 md:grid-cols-3 gap-4">
-        <div class="aspect-video">{_gimg('image-07.jpg')}</div>
-        <div class="aspect-video">{_gimg('image-08.jpg')}</div>
-        <div class="aspect-video hidden md:block">{_gimg('image-09.jpg')}</div>
-        <div class="aspect-video">{_gimg('image-05.jpg')}</div>
-        <div class="aspect-video">{_gimg('image-10.jpg')}</div>
-        <div class="aspect-video hidden md:block">{_gimg('image-03.jpg')}</div>
+      <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-8">
+        <div class="image-wrapper gallery">{_gimg('image-07.jpg')}</div>
+        <div class="image-wrapper gallery">{_gimg('image-08.jpg')}</div>
+        <div class="image-wrapper gallery hidden md:block">{_gimg('image-09.jpg')}</div>
+        <div class="image-wrapper gallery">{_gimg('image-05.jpg')}</div>
+        <div class="image-wrapper gallery">{_gimg('image-10.jpg')}</div>
+        <div class="image-wrapper gallery hidden md:block">{_gimg('image-03.jpg')}</div>
       </div>
     </div>
   </section>"""
@@ -1011,13 +1011,13 @@ def _build_index_html(data, content: dict, primary: str, primary_dark: str) -> s
         <p class="label mb-4">Unsere Arbeit</p>
         <h2 class="text-4xl md:text-5xl font-bold text-gray-900">Einblicke in unsere Projekte</h2>
       </div>
-      <div class="grid grid-cols-2 md:grid-cols-3 gap-4">
-        <div class="aspect-video">{_gimg('image-07.jpg')}</div>
-        <div class="aspect-video">{_gimg('image-08.jpg')}</div>
-        <div class="aspect-video hidden md:block">{_gimg('image-09.jpg')}</div>
-        <div class="aspect-video">{_gimg('image-05.jpg')}</div>
-        <div class="aspect-video">{_gimg('image-10.jpg')}</div>
-        <div class="aspect-video hidden md:block">{_gimg('image-03.jpg')}</div>
+      <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-8">
+        <div class="image-wrapper gallery">{_gimg('image-07.jpg')}</div>
+        <div class="image-wrapper gallery">{_gimg('image-08.jpg')}</div>
+        <div class="image-wrapper gallery hidden md:block">{_gimg('image-09.jpg')}</div>
+        <div class="image-wrapper gallery">{_gimg('image-05.jpg')}</div>
+        <div class="image-wrapper gallery">{_gimg('image-10.jpg')}</div>
+        <div class="image-wrapper gallery hidden md:block">{_gimg('image-03.jpg')}</div>
       </div>
     </div>
   </section>"""
@@ -1101,13 +1101,13 @@ def _build_index_html(data, content: dict, primary: str, primary_dark: str) -> s
         <p class="label mb-4">Unsere Arbeit</p>
         <h2 class="text-4xl md:text-5xl font-bold text-white">Einblicke in unsere Projekte</h2>
       </div>
-      <div class="grid grid-cols-2 md:grid-cols-3 gap-4">
-        <div class="aspect-video">{_gimg('image-07.jpg', 'rounded-2xl')}</div>
-        <div class="aspect-video">{_gimg('image-08.jpg', 'rounded-2xl')}</div>
-        <div class="aspect-video hidden md:block">{_gimg('image-09.jpg', 'rounded-2xl')}</div>
-        <div class="aspect-video">{_gimg('image-05.jpg', 'rounded-2xl')}</div>
-        <div class="aspect-video">{_gimg('image-10.jpg', 'rounded-2xl')}</div>
-        <div class="aspect-video hidden md:block">{_gimg('image-03.jpg', 'rounded-2xl')}</div>
+      <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-8">
+        <div class="image-wrapper gallery">{_gimg('image-07.jpg', 'rounded-2xl')}</div>
+        <div class="image-wrapper gallery">{_gimg('image-08.jpg', 'rounded-2xl')}</div>
+        <div class="image-wrapper gallery hidden md:block">{_gimg('image-09.jpg', 'rounded-2xl')}</div>
+        <div class="image-wrapper gallery">{_gimg('image-05.jpg', 'rounded-2xl')}</div>
+        <div class="image-wrapper gallery">{_gimg('image-10.jpg', 'rounded-2xl')}</div>
+        <div class="image-wrapper gallery hidden md:block">{_gimg('image-03.jpg', 'rounded-2xl')}</div>
       </div>
     </div>
   </section>"""
@@ -1192,15 +1192,15 @@ def _build_index_html(data, content: dict, primary: str, primary_dark: str) -> s
         <p class="label mb-4">Unsere Arbeit</p>
         <h2 class="text-4xl md:text-5xl font-bold text-gray-900">Einblicke in unsere Projekte</h2>
       </div>
-      <div class="grid grid-cols-2 md:grid-cols-3 gap-4">
+      <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-8">
         <div class="row-span-2 rounded-3xl overflow-hidden reveal group relative">
           <img src="image-07.jpg" alt="Projekt" class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700">
           <div class="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300"><span class="text-white font-semibold text-sm tracking-wide">Projekt ansehen</span></div>
         </div>
-        <div class="aspect-video">{_gimg('image-08.jpg', 'rounded-2xl')}</div>
-        <div class="aspect-video">{_gimg('image-09.jpg', 'rounded-2xl')}</div>
-        <div class="aspect-video">{_gimg('image-05.jpg', 'rounded-2xl')}</div>
-        <div class="aspect-video">{_gimg('image-10.jpg', 'rounded-2xl')}</div>
+        <div class="image-wrapper gallery">{_gimg('image-08.jpg', 'rounded-2xl')}</div>
+        <div class="image-wrapper gallery">{_gimg('image-09.jpg', 'rounded-2xl')}</div>
+        <div class="image-wrapper gallery">{_gimg('image-05.jpg', 'rounded-2xl')}</div>
+        <div class="image-wrapper gallery">{_gimg('image-10.jpg', 'rounded-2xl')}</div>
       </div>
     </div>
   </section>"""
@@ -1276,13 +1276,13 @@ def _build_index_html(data, content: dict, primary: str, primary_dark: str) -> s
         <p class="label mb-4">Unsere Arbeit</p>
         <h2 class="text-4xl md:text-5xl font-bold text-gray-900">Einblicke in unsere Projekte</h2>
       </div>
-      <div class="grid grid-cols-2 md:grid-cols-3 gap-4">
-        <div class="aspect-video">{_gimg('image-07.jpg', 'rounded-none')}</div>
-        <div class="aspect-video">{_gimg('image-08.jpg', 'rounded-none')}</div>
-        <div class="aspect-video hidden md:block">{_gimg('image-09.jpg', 'rounded-none')}</div>
-        <div class="aspect-video">{_gimg('image-05.jpg', 'rounded-none')}</div>
-        <div class="aspect-video">{_gimg('image-10.jpg', 'rounded-none')}</div>
-        <div class="aspect-video hidden md:block">{_gimg('image-03.jpg', 'rounded-none')}</div>
+      <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-8">
+        <div class="image-wrapper gallery">{_gimg('image-07.jpg', 'rounded-none')}</div>
+        <div class="image-wrapper gallery">{_gimg('image-08.jpg', 'rounded-none')}</div>
+        <div class="image-wrapper gallery hidden md:block">{_gimg('image-09.jpg', 'rounded-none')}</div>
+        <div class="image-wrapper gallery">{_gimg('image-05.jpg', 'rounded-none')}</div>
+        <div class="image-wrapper gallery">{_gimg('image-10.jpg', 'rounded-none')}</div>
+        <div class="image-wrapper gallery hidden md:block">{_gimg('image-03.jpg', 'rounded-none')}</div>
       </div>
     </div>
   </section>"""
@@ -1378,12 +1378,12 @@ def _build_index_html(data, content: dict, primary: str, primary_dark: str) -> s
         <h2 class="text-4xl md:text-5xl font-bold text-gray-900">Einblicke in unsere Projekte</h2>
       </div>
       <div class="grid grid-cols-2 md:grid-cols-3 gap-0.5">
-        <div class="aspect-video">{_gimg('image-07.jpg', 'rounded-none')}</div>
-        <div class="aspect-video">{_gimg('image-08.jpg', 'rounded-none')}</div>
-        <div class="aspect-video hidden md:block">{_gimg('image-09.jpg', 'rounded-none')}</div>
-        <div class="aspect-video">{_gimg('image-05.jpg', 'rounded-none')}</div>
-        <div class="aspect-video">{_gimg('image-10.jpg', 'rounded-none')}</div>
-        <div class="aspect-video hidden md:block">{_gimg('image-03.jpg', 'rounded-none')}</div>
+        <div class="image-wrapper gallery">{_gimg('image-07.jpg', 'rounded-none')}</div>
+        <div class="image-wrapper gallery">{_gimg('image-08.jpg', 'rounded-none')}</div>
+        <div class="image-wrapper gallery hidden md:block">{_gimg('image-09.jpg', 'rounded-none')}</div>
+        <div class="image-wrapper gallery">{_gimg('image-05.jpg', 'rounded-none')}</div>
+        <div class="image-wrapper gallery">{_gimg('image-10.jpg', 'rounded-none')}</div>
+        <div class="image-wrapper gallery hidden md:block">{_gimg('image-03.jpg', 'rounded-none')}</div>
       </div>
     </div>
   </section>"""
@@ -1503,6 +1503,13 @@ def _build_index_html(data, content: dict, primary: str, primary_dark: str) -> s
     .a2 {{ animation: up 0.7s ease 0.3s both; }}
     .a3 {{ animation: up 0.7s ease 0.5s both; }}
     .a4 {{ animation: up 0.7s ease 0.7s both; }}
+    /* Image wrappers — consistent aspect ratios, never squeezed or stretched */
+    .image-wrapper {{ width:100%; overflow:hidden; border-radius:1.25rem; background:#f3f4f6; flex-shrink:0; }}
+    .image-wrapper.hero {{ aspect-ratio:16/9; min-height:520px; border-radius:0; }}
+    .image-wrapper.about {{ aspect-ratio:4/3; min-height:420px; }}
+    .image-wrapper.service {{ aspect-ratio:4/3; min-height:280px; }}
+    .image-wrapper.gallery {{ aspect-ratio:4/3; min-height:300px; }}
+    .image-wrapper img {{ width:100%; height:100%; object-fit:cover; object-position:center; display:block; }}
     {hero_css_extra}
   </style>
 </head>
