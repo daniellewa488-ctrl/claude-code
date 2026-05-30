@@ -1,0 +1,26 @@
+name: External Cron Trigger
+
+# This workflow is called by cron-job.org every 5 minutes via repository_dispatch.
+# It is more reliable than GitHub's built-in schedule on free accounts.
+
+on:
+  repository_dispatch:
+    types: [check-inbox]
+  workflow_dispatch:   # also allow manual trigger for testing
+
+jobs:
+  trigger:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger check-inbox workflow
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            await github.rest.actions.createWorkflowDispatch({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              workflow_id: 'check-inbox.yml',
+              ref: 'main'
+            });
+            console.log('check-inbox workflow triggered');
