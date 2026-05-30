@@ -93,6 +93,8 @@ def fetch_new():
                         msg = email.message_from_bytes(md[0][1])
                         print(f"  uid={uid.decode()} from={_decode_str(msg.get('From',''))} subject={_decode_str(msg.get('Subject',''))}")
 
+        new_count = 0
+        skipped_count = 0
         for uid in sorted(uids_found):
             status, msg_data = conn.fetch(uid, "(RFC822)")
             if status != "OK":
@@ -107,13 +109,14 @@ def fetch_new():
                 msg_id = _decode_str(msg.get("From", "")) + "|" + _decode_str(msg.get("Date", ""))
 
             if msg_id in already_processed:
-                print(f"[email_reader] Skipping already-processed email: {msg_id[:60]}")
+                skipped_count += 1
+                print(f"[email_reader] Already processed — skipping: {msg_id[:60]}")
                 continue
 
             sender = _decode_str(msg.get("From", ""))
             subject = _decode_str(msg.get("Subject", ""))
             body = _get_body(msg)
-            print(f"[email_reader] New email to process: subject='{subject}' from='{sender}'")
+            print(f"[email_reader] NEW email to process: subject='{subject}' from='{sender}'")
 
             results.append({"uid": uid, "sender": sender, "body": body, "msg_id": msg_id})
 
@@ -121,6 +124,9 @@ def fetch_new():
             conn.store(uid, "+FLAGS", "\\Seen")
             _save_processed(msg_id)
             already_processed.add(msg_id)
+            new_count += 1
+
+        print(f"[email_reader] Result: {new_count} new, {skipped_count} already processed")
 
         conn.logout()
     except Exception as e:
