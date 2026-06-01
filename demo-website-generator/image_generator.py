@@ -383,7 +383,12 @@ def generate(data, crawled=None) -> GeneratedImages:
             filename = f"image-{slot:02d}.jpg"
             encoded = quote(prompt)
             seed = base_seed + i
-            url = f"{POLLINATIONS_BASE}/{encoded}?width=1280&height=720&nologo=true&model=turbo&seed={seed}"
+            # Hero (i=1) and CTA background (i=10) are 16:9; all other sections are 4:3
+            if i in (1, 10):
+                dims = "width=1280&height=720"
+            else:
+                dims = "width=1024&height=768"
+            url = f"{POLLINATIONS_BASE}/{encoded}?{dims}&nologo=true&model=turbo&seed={seed}"
             try:
                 print(f"[image_generator] Generating AI image {filename} (seed={seed})...")
                 img_bytes = _download(url)

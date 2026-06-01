@@ -765,9 +765,9 @@ def _build_index_html(data, content: dict, primary: str, primary_dark: str) -> s
     # Gallery hover overlay snippet (shared)
     def _gimg(src, extra_cls="rounded-2xl"):
         return (
-            f'<div class="reveal group relative overflow-hidden {extra_cls} shadow-sm">'
-            f'<img src="{src}" alt="Projekt" class="w-full h-full object-cover'
-            f' group-hover:scale-110 transition-transform duration-700">'
+            f'<div class="reveal group relative overflow-hidden {extra_cls} shadow-sm h-full w-full">'
+            f'<img src="{src}" alt="Projekt" class="w-full h-full object-cover object-center'
+            f' group-hover:scale-110 transition-transform duration-700" style="display:block;min-height:100%;min-width:100%;">'
             f'<div class="absolute inset-0 bg-black/50 flex items-center justify-center'
             f' opacity-0 group-hover:opacity-100 transition-opacity duration-300">'
             f'<span class="text-white font-semibold text-sm tracking-wide">Projekt ansehen</span>'
@@ -1503,13 +1503,14 @@ def _build_index_html(data, content: dict, primary: str, primary_dark: str) -> s
     .a2 {{ animation: up 0.7s ease 0.3s both; }}
     .a3 {{ animation: up 0.7s ease 0.5s both; }}
     .a4 {{ animation: up 0.7s ease 0.7s both; }}
-    /* Image wrappers — consistent aspect ratios, never squeezed or stretched */
-    .image-wrapper {{ width:100%; overflow:hidden; border-radius:1.25rem; background:#f3f4f6; flex-shrink:0; }}
-    .image-wrapper.hero {{ aspect-ratio:16/9; min-height:520px; border-radius:0; }}
-    .image-wrapper.about {{ aspect-ratio:4/3; min-height:420px; }}
-    .image-wrapper.service {{ aspect-ratio:4/3; min-height:280px; }}
-    .image-wrapper.gallery {{ aspect-ratio:4/3; min-height:300px; }}
-    .image-wrapper img {{ width:100%; height:100%; object-fit:cover; object-position:center; display:block; }}
+    /* Image wrappers — fixed heights, never squeezed or stretched */
+    .image-wrapper {{ width:100%; overflow:hidden; border-radius:1.25rem; background:#f3f4f6; flex-shrink:0; position:relative; }}
+    .image-wrapper.hero {{ height:520px; border-radius:0; }}
+    .image-wrapper.about {{ height:420px; }}
+    .image-wrapper.service {{ height:280px; }}
+    .image-wrapper.gallery {{ height:320px; }}
+    .image-wrapper > *, .image-wrapper img {{ width:100%; height:100%; object-fit:cover; object-position:center; display:block; }}
+    @media (max-width:768px) {{ .image-wrapper.hero {{ height:300px; }} .image-wrapper.about {{ height:280px; }} .image-wrapper.gallery {{ height:240px; }} .image-wrapper.service {{ height:220px; }} }}
     {hero_css_extra}
   </style>
 </head>
