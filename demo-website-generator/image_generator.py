@@ -1,4 +1,6 @@
 import io
+import re
+import json
 import time
 import random
 import requests
@@ -12,6 +14,35 @@ except ImportError:
 
 POLLINATIONS_BASE = "https://image.pollinations.ai/prompt"
 TIMEOUT = 90  # increased timeout for slower free model
+
+# ── Image generation rules passed to Claude ──────────────────────────────────
+_IMAGE_RULES = """
+You are an expert website photography art director generating image prompts for a professional demo website.
+
+CORE RULES — never violate:
+- Every image must be realistic, spacious, correctly cropped, and visually unique
+- Never generate squeezed, stretched, distorted, repetitive, badly cropped, or overcrowded images
+- Never use generic images that do not match the specific business
+- Every image must match a different service, section, or business story
+
+SECTION REQUIREMENTS:
+1. Hero (16:9) — wide, premium establishing shot, strong first impression, clearly represents the industry
+2. About (4:3) — realistic work environment or team, professional and trustworthy, not generic
+3–6. Service cards (4:3 each) — ONE image per service, must match that EXACT service title, visually different from all others
+7–9. Gallery/projects (4:3 each) — look like separate completed projects, different types, angles, results
+10. CTA/background (16:9) — atmospheric wide shot suitable as subtle overlay background
+
+SERVICE IMAGE RULE: Every service image must match the exact service it represents. A visitor must understand the service from the image alone without reading text. For landscaping: Gartengestaltung=garden design/layout, Terrassenbau=terrace/paving, Rasenneuanlage=turf laying, Baumfällung=tree work, Heckenschnitt=hedge trimming, Gartenpflege=maintenance.
+
+NO REPETITION RULE: Every image must be unique in scene, angle, subject, background, composition, and service focus. Reject any image that looks like a duplicate of another.
+
+HUMAN IMAGE RULE: Only include humans when they look natural and realistic. Reject if face/hands/fingers/body look distorted or fake. Prefer wide/medium shots where the work scene matters more than the face. A clean project result image is always better than a bad AI-generated human.
+
+AVOID FAKE CREDIBILITY: Do not invent project counts, awards, or statistics not found in the business data.
+
+PROMPT FORMAT for each image:
+"Realistic professional website photography for [industry]. Scene: [specific scene matching this section and service]. Location/context: [region]. Composition: spacious, clean, well-balanced, main subject clearly visible, no crowding, no distortion, natural perspective. Lighting: natural daylight, premium commercial look. Style: modern business website, realistic, high quality, sharp but natural. Avoid: text, watermark, logo, distorted objects, unrealistic AI look, overcrowded composition, squeezed framing, duplicate composition."
+"""
 
 
 @dataclass
@@ -256,6 +287,62 @@ def _download(url: str) -> bytes:
                 raise
 
 
+def _generate_prompts_with_claude(data, crawled=None) -> list:
+    """Ask Claude to generate 10 business-specific, rule-compliant image prompts."""
+    import anthropic
+    import config
+
+    context_parts = [
+        f"Company name: {data.company_name}",
+        f"Industry: {data.industry}",
+        f"Region: {data.region or 'Deutschland'}",
+        f"Services: {data.services or 'see website content below'}",
+        f"Target audience: {data.target_audience or 'general customers'}",
+        f"Visual style: {data.style or 'professional modern'}",
+    ]
+    if crawled and getattr(crawled, "found", False) and crawled.full_text:
+        context_parts.append(f"\nWebsite content (crawled):\n{crawled.full_text[:3000]}")
+
+    context = "\n".join(context_parts)
+
+    user_prompt = (
+        f"Business data:\n{context}\n\n"
+        "Generate exactly 10 image prompts for these website sections in this order:\n"
+        "1. Hero image (16:9) — wide premium establishing shot\n"
+        "2. About section (4:3) — realistic team or work environment\n"
+        "3. Service image 1 (4:3) — matches the company's first/main service exactly\n"
+        "4. Service image 2 (4:3) — matches second service, visually distinct\n"
+        "5. Service image 3 (4:3) — matches third service, visually distinct\n"
+        "6. Service image 4 (4:3) — craft/detail/quality focus\n"
+        "7. Gallery image 1 (4:3) — completed project, wide view\n"
+        "8. Gallery image 2 (4:3) — different project, different angle\n"
+        "9. Gallery image 3 (4:3) — result or outcome shown in context\n"
+        "10. CTA background (16:9) — atmospheric, suitable as subtle overlay\n\n"
+        "Return ONLY a valid JSON array of exactly 10 strings. No explanation, no markdown."
+    )
+
+    try:
+        client = anthropic.Anthropic(api_key=config.ANTHROPIC_API_KEY)
+        msg = client.messages.create(
+            model="claude-sonnet-4-6",
+            max_tokens=2500,
+            temperature=0.7,
+            system=_IMAGE_RULES,
+            messages=[{"role": "user", "content": user_prompt}],
+        )
+        raw = msg.content[0].text.strip()
+        raw = re.sub(r"^```[a-z]*\n?", "", raw)
+        raw = re.sub(r"\n?```$", "", raw).strip()
+        prompts = json.loads(raw)
+        if isinstance(prompts, list) and len(prompts) >= 10:
+            print(f"[image_generator] Claude generated {len(prompts)} custom image prompts")
+            return prompts[:10]
+    except Exception as e:
+        print(f"[image_generator] Claude prompt generation failed ({e}), using fallback prompts")
+
+    return None  # caller falls back to _build_prompts()
+
+
 def generate(data, crawled=None) -> GeneratedImages:
     result = GeneratedImages()
     base_seed = random.randint(1, 999999)
@@ -285,7 +372,9 @@ def generate(data, crawled=None) -> GeneratedImages:
     # ── Step 2: Fill remaining slots with AI-generated images ─────────────────
     remaining = 10 - company_slots
     if remaining > 0:
-        prompts = _build_prompts(data.company_name, data.industry, data.region, data.style)
+        # Ask Claude to generate business-specific prompts following the image rules
+        prompts = _generate_prompts_with_claude(data, crawled) or \
+                  _build_prompts(data.company_name, data.industry, data.region, data.style)
         ai_count = 0
         for i, prompt in enumerate(prompts, start=1):
             if ai_count >= remaining:
