@@ -6,6 +6,7 @@ import random
 import requests
 from urllib.parse import quote
 from dataclasses import dataclass, field
+from concurrent.futures import ThreadPoolExecutor, as_completed
 try:
     from PIL import Image as _PILImage
     _PILLOW_OK = True
@@ -13,7 +14,7 @@ except ImportError:
     _PILLOW_OK = False
 
 POLLINATIONS_BASE = "https://image.pollinations.ai/prompt"
-TIMEOUT = 90  # increased timeout for slower free model
+TIMEOUT = 45  # turbo model generates in 3-15s; 45s is plenty
 
 # ── Image generation rules passed to Claude ──────────────────────────────────
 _IMAGE_RULES = """
@@ -273,16 +274,16 @@ def _is_quality_image(img_bytes: bytes, min_width: int = 400, min_height: int = 
         return False
 
 
-def _download(url: str) -> bytes:
-    for attempt in range(3):
+def _download(url: str, retries: int = 2) -> bytes:
+    for attempt in range(retries):
         try:
             resp = requests.get(url, timeout=TIMEOUT)
             resp.raise_for_status()
             return resp.content
         except Exception as e:
-            if attempt < 2:
+            if attempt < retries - 1:
                 print(f"[image_generator] Retrying after error: {e}")
-                time.sleep(5)
+                time.sleep(3)
             else:
                 raise
 
@@ -347,56 +348,78 @@ def generate(data, crawled=None) -> GeneratedImages:
     result = GeneratedImages()
     base_seed = random.randint(1, 999999)
 
-    # ── Step 1: Use company's own website photos first ────────────────────────
-    company_slots = 0
+    # ── Step 1: Download company website photos in parallel ───────────────────
     company_image_urls = getattr(crawled, "company_image_urls", []) if crawled else []
+    accepted_company: dict[int, bytes] = {}  # index → bytes (preserves order)
     if company_image_urls:
-        print(f"[image_generator] Found {len(company_image_urls)} company images to use first")
-    for img_url in company_image_urls:
-        if company_slots >= 10:
-            break
-        slot = company_slots + 1
-        filename = f"image-{slot:02d}.jpg"
-        try:
-            print(f"[image_generator] Downloading company image → {filename}: {img_url}")
-            img_bytes = _download(img_url)
-            if _is_quality_image(img_bytes):
-                result.images[filename] = img_bytes
-                company_slots += 1
-                print(f"[image_generator] Accepted company image {filename}")
-            else:
-                print(f"[image_generator] Rejected low-quality company image, will use AI instead")
-        except Exception as e:
-            print(f"[image_generator] Failed company image {img_url}: {e}")
+        print(f"[image_generator] Downloading {min(len(company_image_urls), 10)} company images in parallel...")
+        urls_to_try = company_image_urls[:10]
 
-    # ── Step 2: Fill remaining slots with AI-generated images ─────────────────
+        def _fetch_company(idx_url):
+            idx, url = idx_url
+            try:
+                b = _download(url)
+                if _is_quality_image(b):
+                    print(f"[image_generator] Accepted company image {idx+1}: {url}")
+                    return (idx, b)
+                else:
+                    print(f"[image_generator] Rejected low-quality company image {idx+1}")
+            except Exception as e:
+                print(f"[image_generator] Failed company image {idx+1}: {e}")
+            return (idx, None)
+
+        with ThreadPoolExecutor(max_workers=5) as ex:
+            futures = {ex.submit(_fetch_company, (i, u)): i for i, u in enumerate(urls_to_try)}
+            for fut in as_completed(futures):
+                idx, b = fut.result()
+                if b is not None:
+                    accepted_company[idx] = b
+
+    # Assign accepted company images to slots in original order
+    company_slots = 0
+    for idx in sorted(accepted_company.keys()):
+        slot = company_slots + 1
+        result.images[f"image-{slot:02d}.jpg"] = accepted_company[idx]
+        company_slots += 1
+
+    # ── Step 2: Fill remaining slots with AI-generated images in parallel ──────
     remaining = 10 - company_slots
     if remaining > 0:
-        # Ask Claude to generate business-specific prompts following the image rules
         prompts = _generate_prompts_with_claude(data, crawled) or \
                   _build_prompts(data.company_name, data.industry, data.region, data.style)
+
+        # Build (prompt_idx, prompt, slot, dims, seed) for each needed AI image
+        tasks = []
         ai_count = 0
         for i, prompt in enumerate(prompts, start=1):
             if ai_count >= remaining:
                 break
             slot = company_slots + ai_count + 1
+            dims = "width=1280&height=720" if i in (1, 10) else "width=1024&height=768"
+            seed = base_seed + i
+            tasks.append((i, prompt, slot, dims, seed))
+            ai_count += 1
+
+        print(f"[image_generator] Generating {len(tasks)} AI images in parallel (5 threads)...")
+
+        def _fetch_ai(task):
+            i, prompt, slot, dims, seed = task
             filename = f"image-{slot:02d}.jpg"
             encoded = quote(prompt)
-            seed = base_seed + i
-            # Hero (i=1) and CTA background (i=10) are 16:9; all other sections are 4:3
-            if i in (1, 10):
-                dims = "width=1280&height=720"
-            else:
-                dims = "width=1024&height=768"
             url = f"{POLLINATIONS_BASE}/{encoded}?{dims}&nologo=true&model=turbo&seed={seed}"
             try:
-                print(f"[image_generator] Generating AI image {filename} (seed={seed})...")
-                img_bytes = _download(url)
-                result.images[filename] = img_bytes
-                ai_count += 1
-                time.sleep(1)
+                print(f"[image_generator] Requesting {filename} (seed={seed})...")
+                b = _download(url)
+                print(f"[image_generator] ✓ {filename} ({len(b):,} bytes)")
+                return (slot, filename, b)
             except Exception as e:
-                print(f"[image_generator] Failed {filename}: {e}")
+                print(f"[image_generator] ✗ {filename}: {e}")
+                return (slot, filename, None)
+
+        with ThreadPoolExecutor(max_workers=5) as ex:
+            for slot, filename, b in ex.map(_fetch_ai, tasks):
+                if b is not None:
+                    result.images[filename] = b
 
     # Download logo if URL provided
     if data.logo_url:
