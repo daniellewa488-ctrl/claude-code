@@ -2,7 +2,6 @@ import io
 import re
 import json
 import time
-import base64
 import random
 import requests
 from urllib.parse import quote
@@ -15,8 +14,6 @@ except ImportError:
     _PILLOW_OK = False
 
 POLLINATIONS_BASE = "https://image.pollinations.ai/prompt"
-TOGETHER_ENDPOINT = "https://api.together.xyz/v1/images/generations"
-HF_ENDPOINT = "https://api-inference.huggingface.co/models/black-forest-labs/FLUX.1-schnell"
 TIMEOUT = 120
 
 # ── Image generation rules passed to Claude ──────────────────────────────────
@@ -281,67 +278,33 @@ def _download(url: str, retries: int = 2) -> bytes:
                 raise
 
 
-# ── Together AI — free FLUX.1-schnell ────────────────────────────────────────
+# ── FLUX.1-schnell via official HF Space (100% free, no API key needed) ──────
 
-def _together_generate(prompt: str, width: int, height: int, seed: int) -> bytes:
-    """Free FLUX.1-schnell via Together AI. Sign up at https://api.together.xyz"""
-    import config as _cfg
-    headers = {
-        "Authorization": f"Bearer {_cfg.TOGETHER_API_KEY}",
-        "Content-Type": "application/json",
-    }
-    payload = {
-        "model": "black-forest-labs/FLUX.1-schnell-Free",
-        "prompt": prompt,
-        "width": width,
-        "height": height,
-        "steps": 4,
-        "seed": seed,
-        "n": 1,
-        "response_format": "b64_json",
-    }
-    resp = requests.post(TOGETHER_ENDPOINT, headers=headers, json=payload, timeout=TIMEOUT)
-    resp.raise_for_status()
-    b64 = resp.json()["data"][0]["b64_json"]
-    return base64.b64decode(b64)
+def _flux_space_generate(prompt: str, width: int, height: int, seed: int) -> bytes:
+    """
+    Free FLUX.1-schnell via the official Black Forest Labs HF Space.
+    No API key required — HF pays for the compute on public spaces.
+    """
+    from gradio_client import Client
 
+    # Space supports up to 2048px but keep within safe range for speed
+    w = min(width, 1360)
+    h = min(height, 768)
 
-# ── Hugging Face FLUX.1-schnell (requires HF Pro account) ────────────────────
-
-def _hf_generate(prompt: str, width: int, height: int, seed: int) -> bytes:
-    """FLUX.1-schnell via Hugging Face Inference API (requires Pro account)."""
-    import config as _cfg
-    headers = {
-        "Authorization": f"Bearer {_cfg.HF_TOKEN}",
-        "Content-Type": "application/json",
-        "X-Wait-For-Model": "true",
-    }
-    payload = {
-        "inputs": prompt,
-        "parameters": {
-            "width": width,
-            "height": height,
-            "num_inference_steps": 4,
-            "seed": seed,
-            "guidance_scale": 0.0,
-        },
-    }
-    resp = requests.post(HF_ENDPOINT, headers=headers, json=payload, timeout=TIMEOUT)
-    resp.raise_for_status()
-    return resp.content
-
-
-def _flux_provider() -> str:
-    """Return 'together', 'hf', or 'none'."""
-    try:
-        import config as _cfg
-        if _cfg.TOGETHER_API_KEY:
-            return "together"
-        if _cfg.HF_TOKEN:
-            return "hf"
-    except Exception:
-        pass
-    return "none"
+    client = Client("black-forest-labs/FLUX.1-schnell", verbose=False)
+    result = client.predict(
+        prompt=prompt,
+        seed=seed,
+        randomize_seed=False,
+        width=w,
+        height=h,
+        num_inference_steps=4,
+        api_name="/infer",
+    )
+    # result is (image_path, seed_used) — read the temp file
+    image_path = result[0] if isinstance(result, (list, tuple)) else result
+    with open(image_path, "rb") as f:
+        return f.read()
 
 
 def _generate_prompts_with_claude(data, crawled=None) -> list:
@@ -465,24 +428,16 @@ def generate(data, crawled=None) -> GeneratedImages:
             tasks.append((i, prompt, slot, dims, seed))
             ai_count += 1
 
-        provider = _flux_provider()
-        provider_label = {"together": "Together AI FLUX.1-schnell (free)", "hf": "Hugging Face FLUX.1-schnell", "none": "none — no API key set"}.get(provider, provider)
-        print(f"[image_generator] Generating {len(tasks)} AI images via {provider_label} (5 threads)...")
+        print(f"[image_generator] Generating {len(tasks)} AI images via FLUX.1-schnell HF Space (free, 5 threads)...")
 
         def _fetch_ai(task):
             i, prompt, slot, dims, seed = task
             filename = f"image-{slot:02d}.jpg"
             w = int(dims.split("width=")[1].split("&")[0])
             h = int(dims.split("height=")[1])
-            if provider == "none":
-                print(f"[image_generator] Skipping {filename} — no FLUX API key configured")
-                return (slot, filename, None)
             try:
                 print(f"[image_generator] Requesting {filename} ({w}x{h}, seed={seed})...")
-                if provider == "together":
-                    b = _together_generate(prompt, w, h, seed)
-                else:
-                    b = _hf_generate(prompt, w, h, seed)
+                b = _flux_space_generate(prompt, w, h, seed)
                 print(f"[image_generator] ✓ {filename} ({len(b):,} bytes)")
                 return (slot, filename, b)
             except Exception as e:
@@ -527,11 +482,7 @@ def generate(data, crawled=None) -> GeneratedImages:
                 "clean vector illustration style, white background, "
                 "no text labels, suitable as brand mark, high quality"
             )
-            prov = _flux_provider()
-            if prov == "together":
-                result.logo_bytes = _together_generate(logo_prompt, 512, 512, base_seed)
-            elif prov == "hf":
-                result.logo_bytes = _hf_generate(logo_prompt, 512, 512, base_seed)
+            result.logo_bytes = _flux_space_generate(logo_prompt, 512, 512, base_seed)
             print(f"[image_generator] AI logo generated ({len(result.logo_bytes):,} bytes)")
         except Exception as e:
             print(f"[image_generator] AI logo generation failed: {e}")
