@@ -451,7 +451,13 @@ def generate(data, crawled=None) -> GeneratedImages:
             try:
                 print(f"[image_generator] Requesting {filename} ({w}x{h}, seed={seed})...")
                 if use_hf:
-                    b = _hf_generate(prompt, w, h, seed)
+                    try:
+                        b = _hf_generate(prompt, w, h, seed)
+                    except Exception as hf_err:
+                        print(f"[image_generator] HF failed ({type(hf_err).__name__}), falling back to Pollinations...")
+                        encoded = quote(prompt)
+                        url = f"{POLLINATIONS_BASE}/{encoded}?{dims}&nologo=true&model=turbo&seed={seed}"
+                        b = _download(url)
                 else:
                     encoded = quote(prompt)
                     url = f"{POLLINATIONS_BASE}/{encoded}?{dims}&nologo=true&model=turbo&seed={seed}"
@@ -501,7 +507,13 @@ def generate(data, crawled=None) -> GeneratedImages:
                 "no text labels, suitable as brand mark, high quality"
             )
             if _use_hf():
-                result.logo_bytes = _hf_generate(logo_prompt, 512, 512, base_seed)
+                try:
+                    result.logo_bytes = _hf_generate(logo_prompt, 512, 512, base_seed)
+                except Exception as hf_err:
+                    print(f"[image_generator] HF logo failed ({type(hf_err).__name__}), falling back to Pollinations...")
+                    encoded = quote(logo_prompt)
+                    logo_url = f"{POLLINATIONS_BASE}/{encoded}?width=512&height=512&nologo=true&model=turbo&seed={base_seed}"
+                    result.logo_bytes = _download(logo_url)
             else:
                 encoded = quote(logo_prompt)
                 logo_url = f"{POLLINATIONS_BASE}/{encoded}?width=512&height=512&nologo=true&model=turbo&seed={base_seed}"
