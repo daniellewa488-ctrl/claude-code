@@ -278,6 +278,45 @@ def _download(url: str, retries: int = 2) -> bytes:
                 raise
 
 
+# ── fal.ai FLUX.1 Schnell ─────────────────────────────────────────────────────
+FAL_ENDPOINT = "https://fal.run/fal-ai/flux/schnell"
+
+
+def _fal_generate(prompt: str, width: int, height: int, seed: int) -> bytes:
+    """
+    Generate one image via fal.ai FLUX.1 Schnell.
+    ~$0.003 per image. Requires FAL_KEY in environment.
+    Returns raw image bytes.
+    """
+    import config as _cfg
+    headers = {
+        "Authorization": f"Key {_cfg.FAL_KEY}",
+        "Content-Type": "application/json",
+    }
+    payload = {
+        "prompt": prompt,
+        "image_size": {"width": width, "height": height},
+        "num_inference_steps": 4,
+        "seed": seed,
+        "num_images": 1,
+        "enable_safety_checker": False,
+    }
+    resp = requests.post(FAL_ENDPOINT, headers=headers, json=payload, timeout=120)
+    resp.raise_for_status()
+    img_url = resp.json()["images"][0]["url"]
+    img_resp = requests.get(img_url, timeout=60)
+    img_resp.raise_for_status()
+    return img_resp.content
+
+
+def _use_fal() -> bool:
+    try:
+        import config as _cfg
+        return bool(_cfg.FAL_KEY)
+    except Exception:
+        return False
+
+
 def _generate_prompts_with_claude(data, crawled=None) -> list:
     """Ask Claude to generate 10 business-specific, rule-compliant image prompts."""
     import anthropic
@@ -399,16 +438,24 @@ def generate(data, crawled=None) -> GeneratedImages:
             tasks.append((i, prompt, slot, dims, seed))
             ai_count += 1
 
-        print(f"[image_generator] Generating {len(tasks)} AI images in parallel (5 threads)...")
+        use_fal = _use_fal()
+        provider = "fal.ai FLUX.1" if use_fal else "Pollinations turbo"
+        print(f"[image_generator] Generating {len(tasks)} AI images via {provider} (5 threads)...")
 
         def _fetch_ai(task):
             i, prompt, slot, dims, seed = task
             filename = f"image-{slot:02d}.jpg"
-            encoded = quote(prompt)
-            url = f"{POLLINATIONS_BASE}/{encoded}?{dims}&nologo=true&model=turbo&seed={seed}"
+            # Parse width/height from dims string e.g. "width=1024&height=768"
+            w = int(dims.split("width=")[1].split("&")[0])
+            h = int(dims.split("height=")[1])
             try:
-                print(f"[image_generator] Requesting {filename} (seed={seed})...")
-                b = _download(url)
+                print(f"[image_generator] Requesting {filename} ({w}x{h}, seed={seed})...")
+                if use_fal:
+                    b = _fal_generate(prompt, w, h, seed)
+                else:
+                    encoded = quote(prompt)
+                    url = f"{POLLINATIONS_BASE}/{encoded}?{dims}&nologo=true&model=turbo&seed={seed}"
+                    b = _download(url)
                 print(f"[image_generator] ✓ {filename} ({len(b):,} bytes)")
                 return (slot, filename, b)
             except Exception as e:
@@ -453,9 +500,12 @@ def generate(data, crawled=None) -> GeneratedImages:
                 "clean vector illustration style, white background, "
                 "no text labels, suitable as brand mark, high quality"
             )
-            encoded = quote(logo_prompt)
-            logo_url = f"{POLLINATIONS_BASE}/{encoded}?width=512&height=512&nologo=true&model=turbo&seed={base_seed}"
-            result.logo_bytes = _download(logo_url)
+            if _use_fal():
+                result.logo_bytes = _fal_generate(logo_prompt, 512, 512, base_seed)
+            else:
+                encoded = quote(logo_prompt)
+                logo_url = f"{POLLINATIONS_BASE}/{encoded}?width=512&height=512&nologo=true&model=turbo&seed={base_seed}"
+                result.logo_bytes = _download(logo_url)
             print(f"[image_generator] AI logo generated ({len(result.logo_bytes):,} bytes)")
         except Exception as e:
             print(f"[image_generator] AI logo generation failed: {e}")

@@ -27,5 +27,10 @@ STRATO_SFTP_ROOT = os.getenv("STRATO_SFTP_ROOT", "/httpdocs")
 # Preview base URL (your domain where demos live)
 PREVIEW_BASE_URL = os.getenv("PREVIEW_BASE_URL", "https://www.hannahs-webdesign.de")
 
+# fal.ai — FLUX.1 image generation (~$0.003/image for schnell, much better quality)
+# Get key at: https://fal.ai/dashboard/keys
+# If not set, falls back to Pollinations turbo (free)
+FAL_KEY = os.getenv("FAL_KEY", "")
+
 # Polling interval
 POLL_INTERVAL_SECONDS = int(os.getenv("POLL_INTERVAL_SECONDS") or "120")

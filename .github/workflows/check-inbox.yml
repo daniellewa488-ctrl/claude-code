@@ -51,6 +51,7 @@ jobs:
           STRATO_SFTP_PASS: ${{ secrets.STRATO_SFTP_PASS }}
           STRATO_SFTP_ROOT: ${{ secrets.STRATO_SFTP_ROOT }}
           PREVIEW_BASE_URL: ${{ secrets.PREVIEW_BASE_URL }}
+          FAL_KEY: ${{ secrets.FAL_KEY }}
 
       - name: Commit demo log
         if: always()
