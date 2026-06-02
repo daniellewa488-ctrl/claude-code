@@ -184,25 +184,83 @@ def _find_images(soup: BeautifulSoup, base_url: str, seen_urls: set, max_images:
     return found
 
 
-def _extract_contact(html_text: str) -> dict:
-    """Regex-scan raw HTML for phone, email, and German street address."""
-    phone_match = re.search(
-        r"(\+49[\d\s\-\/()]{5,20}|\(0\d{2,5}\)\s*[\d\s\-]{4,12}|0\d{2,5}[\s\/\-]?\d{3,8}[\d\s\-]*)",
-        html_text,
-    )
-    email_match = re.search(r"[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,6}", html_text)
-    # German address pattern: "Musterstraße 12, 12345 Stadt"
-    addr_match = re.search(
-        r"[A-ZÄÖÜ][a-zäöüß]+(straße|strasse|str\.|weg|allee|platz|gasse|ring|damm|chaussee)\s+\d+[a-zA-Z]?"
-        r",?\s*\d{5}\s+[A-ZÄÖÜ][a-zäöüß]+",
-        html_text,
-        re.IGNORECASE,
-    )
-    return {
-        "phone": phone_match.group(0).strip() if phone_match else "",
-        "email": email_match.group(0).strip() if email_match else "",
-        "address": addr_match.group(0).strip() if addr_match else "",
-    }
+def _extract_contact(html_text: str, soup: BeautifulSoup = None) -> dict:
+    """
+    Extract phone, email, and address from a page.
+    Priority: structured HTML tags → regex fallback.
+    """
+    phone = email = address = ""
+
+    # ── 1. Structured HTML extraction (most reliable) ────────────────────────
+    if soup:
+        # tel: links give the exact formatted number
+        for a in soup.find_all("a", href=re.compile(r"^tel:", re.I)):
+            raw = a["href"].replace("tel:", "").strip()
+            if raw:
+                # Prefer the visible text (better formatted), fall back to href value
+                visible = a.get_text(strip=True)
+                phone = visible if visible else raw
+                break
+
+        # mailto: links give the exact email
+        for a in soup.find_all("a", href=re.compile(r"^mailto:", re.I)):
+            raw = a["href"].replace("mailto:", "").split("?")[0].strip()
+            if raw and "@" in raw:
+                email = raw
+                break
+
+        # <address> tag or elements with class/id containing "kontakt"/"address"/"footer"
+        search_zones = []
+        addr_el = soup.find("address")
+        if addr_el:
+            search_zones.append(addr_el.get_text(" ", strip=True))
+        for cls_hint in ("kontakt", "contact", "footer", "address", "impressum"):
+            for el in soup.find_all(class_=re.compile(cls_hint, re.I)):
+                search_zones.append(el.get_text(" ", strip=True))
+        footer = soup.find("footer")
+        if footer:
+            search_zones.append(footer.get_text(" ", strip=True))
+
+        addr_pattern = re.compile(
+            r"[A-Za-zÄÖÜäöüß][A-Za-zÄÖÜäöüß\-]+"
+            r"(?:straße|strasse|str\.|weg|allee|platz|gasse|ring|damm|chaussee)"
+            r"\s+\d+[a-zA-Z]?,?\s*\d{5}\s+[A-Za-zÄÖÜäöüß][A-Za-zÄÖÜäöüß\s\-]+",
+            re.IGNORECASE,
+        )
+        for zone in search_zones:
+            m = addr_pattern.search(zone)
+            if m:
+                address = re.sub(r"\s+", " ", m.group(0)).strip()
+                break
+
+    # ── 2. Regex fallback on raw HTML ─────────────────────────────────────────
+    if not phone:
+        m = re.search(
+            r"(\+49[\s\-\.]?\(?\d+\)?[\d\s\-\.\/]{5,20}"
+            r"|0\d{2,5}[\s\/\-\.]?\d{3,8}[\d\s\-\.]*"
+            r"|01[567]\d[\s\-\.]?\d{3,4}[\s\-\.]?\d{3,4})",  # mobile
+            html_text,
+        )
+        if m:
+            phone = re.sub(r"\s+", " ", m.group(0)).strip()
+
+    if not email:
+        m = re.search(r"[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,6}", html_text)
+        if m:
+            email = m.group(0).strip()
+
+    if not address:
+        m = re.search(
+            r"[A-Za-zÄÖÜäöüß][A-Za-zÄÖÜäöüß\-]+"
+            r"(?:straße|strasse|str\.|weg|allee|platz|gasse|ring|damm|chaussee)"
+            r"\s+\d+[a-zA-Z]?,?\s*\d{5}\s+[A-Za-zÄÖÜäöüß][A-Za-zÄÖÜäöüß\s\-]+",
+            html_text,
+            re.IGNORECASE,
+        )
+        if m:
+            address = re.sub(r"\s+", " ", m.group(0)).strip()
+
+    return {"phone": phone, "email": email, "address": address}
 
 
 def crawl(url: str) -> CrawledData:
@@ -270,8 +328,8 @@ def crawl(url: str) -> CrawledData:
         result.found = True
         result.full_text = "\n\n".join(parts)
 
-        # Contact extraction from all HTML collected
-        contact = _extract_contact(combined_html)
+        # Contact extraction — pass homepage soup for structured tag scanning first
+        contact = _extract_contact(combined_html, soup)
         result.contact_phone = contact["phone"]
         result.contact_email = contact["email"]
         result.contact_address = contact["address"]

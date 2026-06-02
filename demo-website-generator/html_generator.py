@@ -730,6 +730,16 @@ def _build_index_html(data, content: dict, primary: str, primary_dark: str) -> s
     email = content.get("email", "")
     address = content.get("address", "")
 
+    # Pre-build contact items — hide completely when value is missing
+    contact_li_address = f'<li class="text-gray-400 leading-relaxed">{address}</li>' if address else ""
+    contact_li_phone = f'<li><a href="tel:{phone_link}" class="hover:text-white transition-colors">{phone}</a></li>' if phone else ""
+    contact_li_email = f'<li><a href="mailto:{email}" class="hover:text-white transition-colors">{email}</a></li>' if email else ""
+    contact_items_html = contact_li_address + contact_li_phone + contact_li_email
+    # CTA box variant (white text, underline links)
+    cta_addr_p = f'<p>{address}</p>' if address else ""
+    cta_phone_p = f'<p><a href="tel:{phone_link}" class="underline hover:text-white">{phone}</a></p>' if phone else ""
+    cta_email_p = f'<p><a href="mailto:{email}" class="underline hover:text-white">{email}</a></p>' if email else ""
+
     meta_title = content.get("meta_title") or f"{data.company_name} – {slogan}"
     meta_desc = content.get("meta_description") or f"Professionelle {data.industry}-Leistungen in {region}. Kontaktieren Sie {data.company_name} für ein persönliches Angebot."
     schema_type = content.get("schema_type", "LocalBusiness")
@@ -1310,9 +1320,7 @@ def _build_index_html(data, content: dict, primary: str, primary_dark: str) -> s
       <div class="bg-white/10 rounded-3xl p-8">
         <h3 class="text-xl font-bold mb-6">Kontaktieren Sie uns</h3>
         <div class="space-y-3 text-sm text-white/80">
-          <p>{address}</p>
-          <p><a href="tel:{phone_link}" class="underline hover:text-white">{phone}</a></p>
-          <p><a href="mailto:{email}" class="underline hover:text-white">{email}</a></p>
+          {cta_addr_p}{cta_phone_p}{cta_email_p}
         </div>
       </div>
     </div>
@@ -1585,9 +1593,7 @@ def _build_index_html(data, content: dict, primary: str, primary_dark: str) -> s
       <div>
         <h4 class="text-white font-semibold text-sm mb-5">Kontakt</h4>
         <ul class="space-y-3 text-sm">
-          <li class="text-gray-500 leading-relaxed">{address}</li>
-          <li><a href="tel:{phone_link}" class="hover:text-white transition-colors">{phone}</a></li>
-          <li><a href="mailto:{email}" class="hover:text-white transition-colors">{email}</a></li>
+          {contact_items_html}
         </ul>
       </div>
     </div>
@@ -1940,6 +1946,22 @@ def generate(data, crawled) -> GeneratedSite:
         print("[html_generator] Path B: generating content from email data via Claude...")
 
     content = _generate_content(data, crawled)
+
+    # Always override contact fields with real crawled values — never trust Claude for exact data
+    if has_website:
+        if getattr(crawled, "contact_phone", ""):
+            content["phone"] = crawled.contact_phone
+        if getattr(crawled, "contact_email", ""):
+            content["email"] = crawled.contact_email
+        if getattr(crawled, "contact_address", ""):
+            content["address"] = crawled.contact_address
+        if content.get("phone") or content.get("email") or content.get("address"):
+            print(
+                f"[html_generator] Contact injected — "
+                f"phone: {content.get('phone') or '(none)'} | "
+                f"email: {content.get('email') or '(none)'} | "
+                f"address: {content.get('address') or '(none)'}"
+            )
 
     print("[html_generator] Building HTML templates...")
     index_html = _build_index_html(data, content, primary, primary_dark)
