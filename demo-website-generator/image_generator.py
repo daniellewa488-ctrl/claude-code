@@ -283,15 +283,17 @@ def _download(url: str, retries: int = 2) -> bytes:
 def _flux_space_generate(prompt: str, width: int, height: int, seed: int) -> bytes:
     """
     Free FLUX.1-schnell via the official Black Forest Labs HF Space.
-    No API key required — HF pays for the compute on public spaces.
+    Authenticating with a free HF token gives enough ZeroGPU quota.
     """
     from gradio_client import Client
+    import config as _cfg
 
-    # Space supports up to 2048px but keep within safe range for speed
+    # Cap to safe dimensions for speed
     w = min(width, 1360)
     h = min(height, 768)
 
-    client = Client("black-forest-labs/FLUX.1-schnell", verbose=False)
+    token = _cfg.HF_TOKEN or None  # free HF token = more ZeroGPU quota
+    client = Client("black-forest-labs/FLUX.1-schnell", hf_token=token, verbose=False)
     result = client.predict(
         prompt=prompt,
         seed=seed,
@@ -301,7 +303,7 @@ def _flux_space_generate(prompt: str, width: int, height: int, seed: int) -> byt
         num_inference_steps=4,
         api_name="/infer",
     )
-    # result is (image_path, seed_used) — read the temp file
+    # result is (image_path, seed_used)
     image_path = result[0] if isinstance(result, (list, tuple)) else result
     with open(image_path, "rb") as f:
         return f.read()
