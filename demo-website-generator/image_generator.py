@@ -18,31 +18,32 @@ TIMEOUT = 45  # turbo model generates in 3-15s; 45s is plenty
 
 # ── Image generation rules passed to Claude ──────────────────────────────────
 _IMAGE_RULES = """
-You are an expert website photography art director generating image prompts for a professional demo website.
+You are a professional photo director creating DSLR photography prompts for a premium business website.
+The target quality is: photorealistic, sharp, beautiful depth of field with soft bokeh background — exactly like high-end stock photography shot on a Canon EOS R5 or Sony A7R.
 
 CORE RULES — never violate:
-- Every image must be realistic, spacious, correctly cropped, and visually unique
-- Never generate squeezed, stretched, distorted, repetitive, badly cropped, or overcrowded images
-- Never use generic images that do not match the specific business
-- Every image must match a different service, section, or business story
+- Every prompt must produce a PHOTOGRAPH, not an illustration or rendering
+- Every image must be unique in scene, angle, subject, and composition
+- Every image must match the exact business and section it represents
+- No humans unless the scene truly needs them — prefer results/environments/objects
+- If humans are needed: wide or medium shot only, face not the focus, no distorted hands/fingers
 
 SECTION REQUIREMENTS:
-1. Hero (16:9) — wide, premium establishing shot, strong first impression, clearly represents the industry
-2. About (4:3) — realistic work environment or team, professional and trustworthy, not generic
-3–6. Service cards (4:3 each) — ONE image per service, must match that EXACT service title, visually different from all others
-7–9. Gallery/projects (4:3 each) — look like separate completed projects, different types, angles, results
-10. CTA/background (16:9) — atmospheric wide shot suitable as subtle overlay background
+1. Hero (16:9) — cinematic wide establishing shot, golden hour or bright natural light, premium first impression
+2. About (4:3) — authentic workplace or environment, warm and trustworthy, real-feeling
+3–6. Service cards (4:3 each) — one image per service, scene unmistakably matches that service, bokeh background
+7–9. Gallery/projects (4:3 each) — completed project result, different angles and compositions
+10. CTA/background (16:9) — atmospheric, slightly soft, works as page background with text overlay
 
-SERVICE IMAGE RULE: Every service image must match the exact service it represents. A visitor must understand the service from the image alone without reading text. For landscaping: Gartengestaltung=garden design/layout, Terrassenbau=terrace/paving, Rasenneuanlage=turf laying, Baumfällung=tree work, Heckenschnitt=hedge trimming, Gartenpflege=maintenance.
+PHOTOGRAPHY PROMPT FORMAT (use for every image):
+"[Specific detailed scene]. [Location/environment details]. DSLR photograph, Canon EOS R5, 35mm lens, f/2.8 aperture, shallow depth of field, soft bokeh background, natural daylight, sharp subject, photorealistic, high-end commercial photography. No text, no watermark, no logo, no distortion."
 
-NO REPETITION RULE: Every image must be unique in scene, angle, subject, background, composition, and service focus. Reject any image that looks like a duplicate of another.
-
-HUMAN IMAGE RULE: Only include humans when they look natural and realistic. Reject if face/hands/fingers/body look distorted or fake. Prefer wide/medium shots where the work scene matters more than the face. A clean project result image is always better than a bad AI-generated human.
-
-AVOID FAKE CREDIBILITY: Do not invent project counts, awards, or statistics not found in the business data.
-
-PROMPT FORMAT for each image:
-"Realistic professional website photography for [industry]. Scene: [specific scene matching this section and service]. Location/context: [region]. Composition: spacious, clean, well-balanced, main subject clearly visible, no crowding, no distortion, natural perspective. Lighting: natural daylight, premium commercial look. Style: modern business website, realistic, high quality, sharp but natural. Avoid: text, watermark, logo, distorted objects, unrealistic AI look, overcrowded composition, squeezed framing, duplicate composition."
+QUALITY REQUIREMENTS:
+- Subject must be sharp, background softly blurred (bokeh)
+- Natural daylight or warm golden hour lighting — never flat or studio-lit
+- Spacious composition with breathing room — never cramped or overcrowded
+- Colours vivid but natural — not oversaturated
+- No AI artefacts, no plastic-looking textures, no unnatural geometry
 """
 
 
@@ -55,18 +56,18 @@ class GeneratedImages:
 
 
 def _get_industry_scenes(industry: str, company: str, region: str) -> list:
-    """Return 8 visually distinct, industry-specific scene descriptions."""
+    """Return 8 visually distinct, industry-specific scene descriptions for DSLR photography prompts."""
     ind = industry.lower()
     if any(k in ind for k in ["galabau", "garten", "landschaft", "landscap", "außenanlage"]):
         return [
-            "premium completed private garden with stone pathway, manicured lawn, terrace and decorative plants, wide establishing shot",
-            "professional landscapers working neatly in a residential garden, planting and shaping hedges, natural daylight",
-            "modern stone paving and terrace construction in progress, precise laying work, professional tools visible",
-            "lush garden border with mixed perennials and ornamental grasses, soft natural light, spacious framing",
-            "garden irrigation system being installed, clean professional pipe work, organized site",
-            "beautiful finished outdoor relaxation terrace with seating area, warm evening light, premium feel",
-            "aerial-style wide view of a landscaped residential property, garden design visible, spacious composition",
-            "close detail of high-quality natural stonework and planting combination, craftsmanship focus",
+            "sweeping view of a beautifully landscaped private garden with curved stone pathway, manicured lawn, shaped hedges and flowering borders, golden afternoon light",
+            "lush private garden with active sprinkler system watering a perfect green lawn, colorful flower beds in background, shallow depth of field",
+            "freshly laid natural stone terrace with modern garden furniture, surrounding plants, warm sunlight, residential home visible in soft background",
+            "close-up of healthy ornamental shrubs and perennial border planting, rich green tones, soft bokeh background, natural morning light",
+            "professional hedge trimming result — perfectly geometric dark green hedges bordering a residential property, sharp lines, blue sky background",
+            "garden pathway lined with mature plants and ornamental grasses, soft evening golden hour light, leading-line composition",
+            "completed landscaping project: full garden transformation with lawn, borders, stone path and seating area, wide residential view",
+            "premium stone and paving craftsmanship detail — natural stone surface with plant border, sharp foreground, soft green background bokeh",
         ]
     elif any(k in ind for k in ["baumschule", "nursery", "pflanzen", "gärtnerei"]):
         return [
@@ -218,42 +219,31 @@ def _build_prompts(company: str, industry: str, region: str, style: str) -> list
     ind = industry or "professional services"
     reg = region or "Germany"
 
-    avoid = (
-        "Avoid: text in image, watermark, logo, distorted people or objects, "
-        "unrealistic AI-look, overcrowded composition, squeezed or stretched framing, "
-        "blurry subjects, generic stock-photo feel, duplicate scenes."
-    )
-    quality = (
-        "Composition: spacious, clean, well-balanced, main subject clearly visible, "
-        "rule of thirds, breathing room around subject, no crowding. "
-        "Lighting: natural daylight, soft shadows, premium commercial look. "
-        "Style: realistic professional website photography, sharp but natural, high quality."
+    suffix = (
+        "DSLR photograph, Canon EOS R5, 35mm lens, f/2.8 aperture, "
+        "shallow depth of field, soft bokeh background, natural daylight, "
+        "sharp subject, photorealistic, high-end commercial photography. "
+        "No text, no watermark, no logo, no distortion."
     )
 
     scenes = _get_industry_scenes(ind, co, reg)
 
-    section_labels = [
-        "hero section — wide 16:9 establishing shot, strong first impression, spacious landscape",
-        "about section — 4:3 professional team or work environment, authentic human element",
-        "service card 1 — 4:3 medium shot, single clear subject, visually unique",
-        "service card 2 — 4:3 different angle and subject from previous service image",
-        "service card 3 — 4:3 visually distinct scene, shows different aspect of the business",
-        "service card 4 — 4:3 detail or craft focus, quality and expertise close-up",
-        "gallery image 1 — 4:3 completed project wide view, impressive full result",
-        "gallery image 2 — 4:3 project from different perspective, variety in composition",
-        "gallery image 3 — 4:3 customer or result in context, warm and authentic",
-        "CTA background — 16:9 atmospheric wide shot, suitable as subtle overlay background",
+    section_contexts = [
+        f"Wide establishing shot of a premium {ind} environment in {reg}, cinematic composition, golden hour light",
+        f"Authentic {ind} workplace or professional environment, warm and trustworthy atmosphere, {reg}",
+        f"Close-medium shot clearly showing the first main service of a {ind} business, sharp subject with bokeh",
+        f"Different angle — second distinct service of {ind}, unique scene from previous images, {reg}",
+        f"Third service area of {ind} clearly visible, different subject and environment from previous",
+        f"Detail/craftsmanship close-up for {ind}, texture and quality visible, sharp foreground bokeh background",
+        f"Completed project result for {ind} business, wide view, impressive outcome, {reg}",
+        f"Same project type but different angle and composition, variety, {reg}",
+        f"Finished result in real-world context, authentic environment, warm light, {reg}",
+        f"Atmospheric wide shot for {ind}, soft natural light, works as website background, {reg}",
     ]
 
     prompts = []
-    for i, (scene, label) in enumerate(zip(scenes, section_labels)):
-        prompt = (
-            f"Realistic professional website photography for {ind} company in {reg}. "
-            f"Website section: {label}. "
-            f"Scene: {scene}. "
-            f"Location/context: {reg} region, relevant professional environment. "
-            f"{quality} {avoid}"
-        )
+    for scene, context in zip(scenes, section_contexts):
+        prompt = f"{context}. {scene}. {suffix}"
         prompts.append(prompt)
 
     return prompts
@@ -306,19 +296,28 @@ def _generate_prompts_with_claude(data, crawled=None) -> list:
 
     context = "\n".join(context_parts)
 
+    dslr_suffix = (
+        "DSLR photograph, Canon EOS R5, 35mm lens, f/2.8 aperture, "
+        "shallow depth of field, soft bokeh background, natural daylight, "
+        "sharp subject, photorealistic, high-end commercial photography. "
+        "No text, no watermark, no logo, no distortion."
+    )
     user_prompt = (
         f"Business data:\n{context}\n\n"
-        "Generate exactly 10 image prompts for these website sections in this order:\n"
-        "1. Hero image (16:9) — wide premium establishing shot\n"
-        "2. About section (4:3) — realistic team or work environment\n"
-        "3. Service image 1 (4:3) — matches the company's first/main service exactly\n"
-        "4. Service image 2 (4:3) — matches second service, visually distinct\n"
-        "5. Service image 3 (4:3) — matches third service, visually distinct\n"
-        "6. Service image 4 (4:3) — craft/detail/quality focus\n"
-        "7. Gallery image 1 (4:3) — completed project, wide view\n"
-        "8. Gallery image 2 (4:3) — different project, different angle\n"
-        "9. Gallery image 3 (4:3) — result or outcome shown in context\n"
-        "10. CTA background (16:9) — atmospheric, suitable as subtle overlay\n\n"
+        "Generate exactly 10 DSLR photography prompts for these website sections in this order.\n"
+        "Every prompt MUST end with this exact suffix:\n"
+        f'"{dslr_suffix}"\n\n'
+        "Sections:\n"
+        "1. Hero image (16:9) — cinematic wide establishing shot, golden hour light, premium first impression\n"
+        "2. About section (4:3) — authentic workplace or environment, warm trustworthy feel\n"
+        "3. Service image 1 (4:3) — scene unmistakably shows the company's FIRST service, bokeh background\n"
+        "4. Service image 2 (4:3) — scene unmistakably shows the SECOND service, different from image 3\n"
+        "5. Service image 3 (4:3) — scene unmistakably shows the THIRD service, unique composition\n"
+        "6. Service image 4 (4:3) — craftsmanship or quality detail close-up, sharp foreground bokeh background\n"
+        "7. Gallery image 1 (4:3) — completed finished project result, wide view\n"
+        "8. Gallery image 2 (4:3) — different project, different angle and composition from image 7\n"
+        "9. Gallery image 3 (4:3) — finished result in real context, warm natural light\n"
+        "10. CTA background (16:9) — atmospheric, slightly soft, suitable as page background with text overlay\n\n"
         "Return ONLY a valid JSON array of exactly 10 strings. No explanation, no markdown."
     )
 
@@ -406,7 +405,7 @@ def generate(data, crawled=None) -> GeneratedImages:
             i, prompt, slot, dims, seed = task
             filename = f"image-{slot:02d}.jpg"
             encoded = quote(prompt)
-            url = f"{POLLINATIONS_BASE}/{encoded}?{dims}&nologo=true&model=turbo&seed={seed}"
+            url = f"{POLLINATIONS_BASE}/{encoded}?{dims}&nologo=true&model=flux&seed={seed}"
             try:
                 print(f"[image_generator] Requesting {filename} (seed={seed})...")
                 b = _download(url)
@@ -455,7 +454,7 @@ def generate(data, crawled=None) -> GeneratedImages:
                 "no text labels, suitable as brand mark, high quality"
             )
             encoded = quote(logo_prompt)
-            logo_url = f"{POLLINATIONS_BASE}/{encoded}?width=512&height=512&nologo=true&model=turbo&seed={base_seed}"
+            logo_url = f"{POLLINATIONS_BASE}/{encoded}?width=512&height=512&nologo=true&model=flux&seed={base_seed}"
             result.logo_bytes = _download(logo_url)
             print(f"[image_generator] AI logo generated ({len(result.logo_bytes):,} bytes)")
         except Exception as e:
@@ -470,7 +469,7 @@ def generate(data, crawled=None) -> GeneratedImages:
         ]
         for i, prompt in enumerate(logo_prompts, start=1):
             encoded = quote(prompt)
-            url = f"{POLLINATIONS_BASE}/{encoded}?width=1024&height=512&nologo=true&model=turbo&seed={base_seed + 100 + i}"
+            url = f"{POLLINATIONS_BASE}/{encoded}?width=1024&height=512&nologo=true&model=flux&seed={base_seed + 100 + i}"
             try:
                 print(f"[image_generator] Generating logo concept {i}...")
                 logo_bytes = _download(url)
