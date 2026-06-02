@@ -2,14 +2,10 @@ import os
 import imaplib
 import email
 from email.header import decode_header
-from email.utils import parsedate_to_datetime
 from datetime import datetime, timezone, timedelta
 import config
 
 _PROCESSED_FILE = os.path.join(os.path.dirname(__file__), "processed_ids.txt")
-
-# Python-level age guard — reject anything older than this even if IMAP returns it
-_MAX_AGE_HOURS = 24
 
 
 def _load_processed() -> set:
@@ -22,19 +18,6 @@ def _load_processed() -> set:
 def _save_processed(msg_id: str) -> None:
     with open(_PROCESSED_FILE, "a", encoding="utf-8") as f:
         f.write(msg_id + "\n")
-
-
-def _is_recent(msg) -> bool:
-    date_str = msg.get("Date", "")
-    if not date_str:
-        return True
-    try:
-        dt = parsedate_to_datetime(date_str)
-        if dt.tzinfo is None:
-            dt = dt.replace(tzinfo=timezone.utc)
-        return datetime.now(timezone.utc) - dt <= timedelta(hours=_MAX_AGE_HOURS)
-    except Exception:
-        return True
 
 
 def _decode_str(value):
@@ -66,10 +49,14 @@ def _get_body(msg):
 
 def fetch_new():
     """
-    Return unprocessed Workflow emails received in the last 24 hours.
-    Uses IMAP SINCE to filter at the server level so old backlog is never fetched.
-    Marks each returned email as read and records its Message-ID so it is never
-    processed again even if processed_ids.txt is re-used across runs.
+    Return any Workflow email not yet in processed_ids.txt.
+
+    processed_ids.txt is the single source of truth for what is 'new'.
+    No time window check — an email is new if and only if its Message-ID
+    has not been recorded before.
+
+    IMAP SINCE 7 days is used purely as a server-side safety net to avoid
+    scanning years of inbox history if processed_ids.txt is ever wiped.
     """
     results = []
     already_processed = _load_processed()
@@ -87,9 +74,8 @@ def fetch_new():
         unseen_count = len(unseen[0].split()) if unseen[0] else 0
         print(f"[email_reader] INBOX: {total_count} total, {unseen_count} unread")
 
-        # Ask the IMAP server to filter by date — only emails from the last 2 days
-        # (SINCE has date-only precision, so we go back 2 days to avoid timezone edge cases)
-        since_str = (datetime.now(timezone.utc) - timedelta(days=2)).strftime("%d-%b-%Y")
+        # Server-side filter: last 7 days only (safety net — not a processing gate)
+        since_str = (datetime.now(timezone.utc) - timedelta(days=7)).strftime("%d-%b-%Y")
 
         uids_found = set()
         for term in ["Workflow", "workflow", "WORKFLOW"]:
@@ -98,12 +84,12 @@ def fetch_new():
                 for uid in data[0].split():
                     uids_found.add(uid)
 
-        print(f"[email_reader] Found {len(uids_found)} Workflow email(s) in last 2 days")
+        print(f"[email_reader] Found {len(uids_found)} Workflow email(s) in last 7 days")
 
         if not uids_found and unseen_count > 0:
             status, data = conn.search(None, "UNSEEN")
             if status == "OK" and data[0]:
-                print("[email_reader] Unread emails in inbox (for diagnosis):")
+                print("[email_reader] Unread inbox emails (subjects shown for diagnosis):")
                 for uid in data[0].split()[:10]:
                     s, md = conn.fetch(uid, "(BODY[HEADER.FIELDS (SUBJECT FROM)])")
                     if s == "OK":
@@ -111,8 +97,7 @@ def fetch_new():
                         print(f"  uid={uid.decode()} from={_decode_str(m.get('From',''))} subject={_decode_str(m.get('Subject',''))}")
 
         new_count = 0
-        skipped_processed = 0
-        skipped_old = 0
+        skipped_count = 0
 
         for uid in sorted(uids_found):
             status, msg_data = conn.fetch(uid, "(RFC822)")
@@ -121,29 +106,18 @@ def fetch_new():
             raw = msg_data[0][1]
             msg = email.message_from_bytes(raw)
 
-            # Secondary Python-level age check (catches emails just outside the 24h window)
-            if not _is_recent(msg):
-                skipped_old += 1
-                msg_id = _decode_str(msg.get("Message-ID", "")).strip() or (
-                    _decode_str(msg.get("From", "")) + "|" + _decode_str(msg.get("Date", ""))
-                )
-                if msg_id not in already_processed:
-                    _save_processed(msg_id)
-                    already_processed.add(msg_id)
-                continue
-
             msg_id = _decode_str(msg.get("Message-ID", "")).strip()
             if not msg_id:
                 msg_id = _decode_str(msg.get("From", "")) + "|" + _decode_str(msg.get("Date", ""))
 
             if msg_id in already_processed:
-                skipped_processed += 1
+                skipped_count += 1
                 continue
 
             sender = _decode_str(msg.get("From", ""))
             subject = _decode_str(msg.get("Subject", ""))
             body = _get_body(msg)
-            print(f"[email_reader] NEW email: subject='{subject}' from='{sender}'")
+            print(f"[email_reader] NEW: subject='{subject}' from='{sender}'")
 
             results.append({"uid": uid, "sender": sender, "body": body, "msg_id": msg_id})
 
@@ -152,7 +126,7 @@ def fetch_new():
             already_processed.add(msg_id)
             new_count += 1
 
-        print(f"[email_reader] Result: {new_count} new | {skipped_processed} already processed | {skipped_old} too old")
+        print(f"[email_reader] Result: {new_count} new | {skipped_count} already processed")
         conn.logout()
 
     except Exception as e:
