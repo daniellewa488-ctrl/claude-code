@@ -14,7 +14,7 @@ except ImportError:
     _PILLOW_OK = False
 
 POLLINATIONS_BASE = "https://image.pollinations.ai/prompt"
-TIMEOUT = 45  # turbo model generates in 3-15s; 45s is plenty
+TIMEOUT = 60  # turbo model; longer prompts can take up to 30s
 
 # ── Image generation rules passed to Claude ──────────────────────────────────
 _IMAGE_RULES = """
@@ -405,7 +405,7 @@ def generate(data, crawled=None) -> GeneratedImages:
             i, prompt, slot, dims, seed = task
             filename = f"image-{slot:02d}.jpg"
             encoded = quote(prompt)
-            url = f"{POLLINATIONS_BASE}/{encoded}?{dims}&nologo=true&model=flux&seed={seed}"
+            url = f"{POLLINATIONS_BASE}/{encoded}?{dims}&nologo=true&model=turbo&seed={seed}"
             try:
                 print(f"[image_generator] Requesting {filename} (seed={seed})...")
                 b = _download(url)
@@ -454,7 +454,7 @@ def generate(data, crawled=None) -> GeneratedImages:
                 "no text labels, suitable as brand mark, high quality"
             )
             encoded = quote(logo_prompt)
-            logo_url = f"{POLLINATIONS_BASE}/{encoded}?width=512&height=512&nologo=true&model=flux&seed={base_seed}"
+            logo_url = f"{POLLINATIONS_BASE}/{encoded}?width=512&height=512&nologo=true&model=turbo&seed={base_seed}"
             result.logo_bytes = _download(logo_url)
             print(f"[image_generator] AI logo generated ({len(result.logo_bytes):,} bytes)")
         except Exception as e:
@@ -469,7 +469,7 @@ def generate(data, crawled=None) -> GeneratedImages:
         ]
         for i, prompt in enumerate(logo_prompts, start=1):
             encoded = quote(prompt)
-            url = f"{POLLINATIONS_BASE}/{encoded}?width=1024&height=512&nologo=true&model=flux&seed={base_seed + 100 + i}"
+            url = f"{POLLINATIONS_BASE}/{encoded}?width=1024&height=512&nologo=true&model=turbo&seed={base_seed + 100 + i}"
             try:
                 print(f"[image_generator] Generating logo concept {i}...")
                 logo_bytes = _download(url)
