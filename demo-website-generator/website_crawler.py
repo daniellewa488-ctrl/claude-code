@@ -10,10 +10,10 @@ TIMEOUT = 12
 
 # Page paths we want to crawl first — most likely to have useful content
 PRIORITY_KEYWORDS = [
+    "kontakt", "contact", "impressum",              # contact pages first
     "galerie", "gallery", "bilder", "fotos", "portfolio", "referenzen", "projekte",
     "ueber-uns", "uber-uns", "about", "about-us", "ueber", "wir",
     "leistungen", "services", "dienstleistungen", "angebote", "produkte",
-    "kontakt", "contact",
     "team", "profil", "unternehmen",
 ]
 
@@ -21,12 +21,12 @@ PRIORITY_KEYWORDS = [
 @dataclass
 class CrawledData:
     found: bool = False
-    full_text: str = ""                           # Combined structured text from all pages (fed to Claude)
-    contact_phone: str = ""                       # Extracted phone number
-    contact_email: str = ""                       # Extracted email
-    contact_address: str = ""                     # Extracted street address
-    logo_url: str = ""                            # Absolute URL of the logo image
-    company_image_urls: list = field(default_factory=list)  # Real photos found on their website
+    full_text: str = ""
+    contact_phone: str = ""
+    contact_email: str = ""
+    contact_address: str = ""
+    logo_url: str = ""
+    company_image_urls: list = field(default_factory=list)
 
 
 def _is_priority(url: str) -> bool:
@@ -50,7 +50,6 @@ def _internal_links(soup: BeautifulSoup, base_url: str, max_links: int = 8) -> l
             continue
         if re.search(r"\.(jpg|jpeg|png|gif|svg|pdf|zip|css|js|ico|woff|xml)$", parsed.path, re.I):
             continue
-        # Strip query string / fragment for dedup
         clean = parsed.scheme + "://" + parsed.netloc + parsed.path.rstrip("/")
         if clean in seen or clean == base_url.rstrip("/"):
             continue
@@ -60,8 +59,9 @@ def _internal_links(soup: BeautifulSoup, base_url: str, max_links: int = 8) -> l
     return (priority + others)[:max_links]
 
 
-def _clean_text(soup: BeautifulSoup, max_chars: int = 3500) -> str:
-    """Extract structured readable text from a page."""
+def _clean_text(html: str, max_chars: int = 3500) -> str:
+    """Extract structured readable text — works on raw HTML string to avoid mutating shared soup."""
+    soup = BeautifulSoup(html, "html.parser")
     for tag in soup(["script", "style", "noscript", "svg", "head",
                      "button", "form", "input", "select", "textarea",
                      "nav", "header", "footer", "aside"]):
@@ -69,7 +69,6 @@ def _clean_text(soup: BeautifulSoup, max_chars: int = 3500) -> str:
 
     lines = []
     for el in soup.find_all(["h1", "h2", "h3", "p", "li", "address", "span", "div"]):
-        # Skip tiny snippets and deeply nested containers
         if el.find(["h1", "h2", "h3", "p"]):
             continue
         text = el.get_text(" ", strip=True)
@@ -91,10 +90,8 @@ def _clean_text(soup: BeautifulSoup, max_chars: int = 3500) -> str:
 
 
 def _find_logo(soup: BeautifulSoup, base_url: str) -> str:
-    """Look for a logo image using progressively wider patterns."""
     domain = urlparse(base_url).netloc
 
-    # 1. Any <img> whose src / alt / class / id contains "logo"
     for img in soup.find_all("img"):
         src = img.get("src", "").strip()
         if not src or src.startswith("data:"):
@@ -108,7 +105,6 @@ def _find_logo(soup: BeautifulSoup, base_url: str) -> str:
         if "logo" in haystack:
             return urljoin(base_url, src)
 
-    # 2. <img> inside a container whose class or id contains "logo"
     for container in soup.find_all(class_=re.compile(r"logo", re.I)):
         img = container.find("img")
         if img and img.get("src") and not img["src"].startswith("data:"):
@@ -118,7 +114,6 @@ def _find_logo(soup: BeautifulSoup, base_url: str) -> str:
         if img and img.get("src") and not img["src"].startswith("data:"):
             return urljoin(base_url, img["src"].strip())
 
-    # 3. First <img> inside <nav> or <header> (very commonly the logo)
     for tag in ("nav", "header"):
         el = soup.find(tag)
         if el:
@@ -127,7 +122,6 @@ def _find_logo(soup: BeautifulSoup, base_url: str) -> str:
                 if src and not src.startswith("data:") and not src.lower().endswith(".gif"):
                     return urljoin(base_url, src)
 
-    # 4. First <img> inside a link pointing to the homepage root
     for a in soup.find_all("a", href=True):
         target = urljoin(base_url, a["href"])
         if urlparse(target).netloc == domain and urlparse(target).path.rstrip("/") in ("", "/"):
@@ -139,13 +133,8 @@ def _find_logo(soup: BeautifulSoup, base_url: str) -> str:
 
 
 def _find_images(soup: BeautifulSoup, base_url: str, seen_urls: set, max_images: int = 5) -> list:
-    """Extract real content photos from the page — skip logos, icons, and tiny images."""
     found = []
-
-    # Also check CSS background-image in style attributes
-    candidates = soup.find_all("img")
-
-    for img in candidates:
+    for img in soup.find_all("img"):
         src = img.get("src", "").strip()
         if not src or src.startswith("data:"):
             continue
@@ -157,7 +146,6 @@ def _find_images(soup: BeautifulSoup, base_url: str, seen_urls: set, max_images:
         if clean in seen_urls:
             continue
 
-        # Skip logos, icons, sprites, and navigation graphics
         haystack = " ".join([
             src.lower(),
             img.get("alt", "").lower(),
@@ -167,14 +155,17 @@ def _find_images(soup: BeautifulSoup, base_url: str, seen_urls: set, max_images:
         if any(w in haystack for w in ("logo", "icon", "sprite", "avatar", "pixel", "placeholder", "banner-logo")):
             continue
 
-        # Skip images that are tiny based on explicit dimensions
+        skip = False
         for attr in ("width", "height"):
             val = img.get(attr, "")
             try:
                 if int(str(val).replace("px", "")) < 150:
-                    continue
+                    skip = True
+                    break
             except (ValueError, TypeError):
                 pass
+        if skip:
+            continue
 
         seen_urls.add(clean)
         found.append(full)
@@ -184,79 +175,92 @@ def _find_images(soup: BeautifulSoup, base_url: str, seen_urls: set, max_images:
     return found
 
 
-def _extract_contact(html_text: str, soup: BeautifulSoup = None) -> dict:
+def _extract_contact(all_page_html: list) -> dict:
     """
-    Extract phone, email, and address from a page.
-    Priority: structured HTML tags → regex fallback.
+    Extract phone, email, and address from a list of raw HTML strings (one per page).
+    Works on fresh soup objects — never on a soup already mutated by _clean_text.
+
+    Strategy per field:
+      phone  → <a href="tel:..."> across all pages, then regex
+      email  → <a href="mailto:..."> across all pages, then regex
+      address → <address> tag, then footer/kontakt zone regex, then full-page regex
     """
     phone = email = address = ""
 
-    # ── 1. Structured HTML extraction (most reliable) ────────────────────────
-    if soup:
-        # tel: links give the exact formatted number
-        for a in soup.find_all("a", href=re.compile(r"^tel:", re.I)):
-            raw = a["href"].replace("tel:", "").strip()
-            if raw:
-                # Prefer the visible text (better formatted), fall back to href value
-                visible = a.get_text(strip=True)
-                phone = visible if visible else raw
-                break
+    addr_pattern = re.compile(
+        r"[A-Za-zÄÖÜäöüß][A-Za-zÄÖÜäöüß\-]+"
+        r"(?:straße|strasse|str\.|weg|allee|platz|gasse|ring|damm|chaussee)"
+        r"\s+\d+[a-zA-Z]?,?\s*\d{5}\s+[A-Za-zÄÖÜäöüß][A-Za-zÄÖÜäöüß\s\-]+",
+        re.IGNORECASE,
+    )
 
-        # mailto: links give the exact email
-        for a in soup.find_all("a", href=re.compile(r"^mailto:", re.I)):
-            raw = a["href"].replace("mailto:", "").split("?")[0].strip()
-            if raw and "@" in raw:
-                email = raw
-                break
+    for raw_html in all_page_html:
+        soup = BeautifulSoup(raw_html, "html.parser")
 
-        # <address> tag or elements with class/id containing "kontakt"/"address"/"footer"
-        search_zones = []
-        addr_el = soup.find("address")
-        if addr_el:
-            search_zones.append(addr_el.get_text(" ", strip=True))
-        for cls_hint in ("kontakt", "contact", "footer", "address", "impressum"):
-            for el in soup.find_all(class_=re.compile(cls_hint, re.I)):
-                search_zones.append(el.get_text(" ", strip=True))
-        footer = soup.find("footer")
-        if footer:
-            search_zones.append(footer.get_text(" ", strip=True))
+        # ── Phone from tel: links ───────────────────────────────────────────
+        if not phone:
+            for a in soup.find_all("a", href=re.compile(r"^tel:", re.I)):
+                raw = a["href"].replace("tel:", "").strip()
+                if raw:
+                    visible = a.get_text(strip=True)
+                    phone = visible if re.search(r"\d{4,}", visible) else raw
+                    break
 
-        addr_pattern = re.compile(
-            r"[A-Za-zÄÖÜäöüß][A-Za-zÄÖÜäöüß\-]+"
-            r"(?:straße|strasse|str\.|weg|allee|platz|gasse|ring|damm|chaussee)"
-            r"\s+\d+[a-zA-Z]?,?\s*\d{5}\s+[A-Za-zÄÖÜäöüß][A-Za-zÄÖÜäöüß\s\-]+",
-            re.IGNORECASE,
-        )
-        for zone in search_zones:
-            m = addr_pattern.search(zone)
-            if m:
-                address = re.sub(r"\s+", " ", m.group(0)).strip()
-                break
+        # ── Email from mailto: links ────────────────────────────────────────
+        if not email:
+            for a in soup.find_all("a", href=re.compile(r"^mailto:", re.I)):
+                raw = a["href"].replace("mailto:", "").split("?")[0].strip()
+                if raw and "@" in raw:
+                    email = raw
+                    break
 
-    # ── 2. Regex fallback on raw HTML ─────────────────────────────────────────
+        # ── Address from <address> tag ──────────────────────────────────────
+        if not address:
+            addr_el = soup.find("address")
+            if addr_el:
+                txt = re.sub(r"\s+", " ", addr_el.get_text(" ", strip=True))
+                m = addr_pattern.search(txt)
+                if m:
+                    address = re.sub(r"\s+", " ", m.group(0)).strip()
+
+        # ── Address from footer / kontakt zones ────────────────────────────
+        if not address:
+            zones = []
+            footer = soup.find("footer")
+            if footer:
+                zones.append(footer.get_text(" ", strip=True))
+            for cls in ("kontakt", "contact", "footer", "address", "impressum"):
+                for el in soup.find_all(class_=re.compile(cls, re.I)):
+                    zones.append(el.get_text(" ", strip=True))
+            for zone in zones:
+                m = addr_pattern.search(re.sub(r"\s+", " ", zone))
+                if m:
+                    address = re.sub(r"\s+", " ", m.group(0)).strip()
+                    break
+
+        if phone and email and address:
+            break  # all found — stop scanning pages
+
+    # ── Regex fallback across combined raw HTML ─────────────────────────────
+    combined = "\n".join(all_page_html)
+
     if not phone:
         m = re.search(
             r"(\+49[\s\-\.]?\(?\d+\)?[\d\s\-\.\/]{5,20}"
             r"|0\d{2,5}[\s\/\-\.]?\d{3,8}[\d\s\-\.]*"
-            r"|01[567]\d[\s\-\.]?\d{3,4}[\s\-\.]?\d{3,4})",  # mobile
-            html_text,
+            r"|01[5679]\d[\s\-\.]?\d{3,4}[\s\-\.]?\d{3,4})",
+            combined,
         )
         if m:
             phone = re.sub(r"\s+", " ", m.group(0)).strip()
 
     if not email:
-        m = re.search(r"[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,6}", html_text)
+        m = re.search(r"[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,6}", combined)
         if m:
             email = m.group(0).strip()
 
     if not address:
-        m = re.search(
-            r"[A-Za-zÄÖÜäöüß][A-Za-zÄÖÜäöüß\-]+"
-            r"(?:straße|strasse|str\.|weg|allee|platz|gasse|ring|damm|chaussee)"
-            r"\s+\d+[a-zA-Z]?,?\s*\d{5}\s+[A-Za-zÄÖÜäöüß][A-Za-zÄÖÜäöüß\s\-]+",
-            html_text,
-            re.IGNORECASE,
-        )
+        m = addr_pattern.search(combined)
         if m:
             address = re.sub(r"\s+", " ", m.group(0)).strip()
 
@@ -268,7 +272,7 @@ def crawl(url: str) -> CrawledData:
         return CrawledData(found=False)
 
     result = CrawledData()
-    combined_html = ""
+    all_page_html: list = []   # raw HTML per page — kept intact for contact extraction
     parts = []
     seen_image_urls: set = set()
 
@@ -276,24 +280,22 @@ def crawl(url: str) -> CrawledData:
         print(f"[website_crawler] Fetching homepage: {url}")
         resp = requests.get(url, headers=HEADERS, timeout=TIMEOUT, allow_redirects=True)
         resp.raise_for_status()
-        combined_html += resp.text
+        all_page_html.append(resp.text)
         soup = BeautifulSoup(resp.text, "html.parser")
 
-        # Logo detection from homepage
         logo = _find_logo(soup, resp.url)
         if logo:
             result.logo_url = logo
             print(f"[website_crawler] Found logo: {logo}")
 
-        # Collect content images from homepage
         homepage_imgs = _find_images(soup, resp.url, seen_image_urls, max_images=4)
         result.company_image_urls.extend(homepage_imgs)
 
-        text = _clean_text(soup, 5000)
+        # _clean_text now takes raw HTML string — soup stays untouched
+        text = _clean_text(resp.text, 5000)
         if text:
             parts.append(f"=== Startseite ===\n{text}")
 
-        # Collect subpages to crawl
         subpages = _internal_links(soup, resp.url, max_links=12)
         print(f"[website_crawler] Found {len(subpages)} subpages to crawl")
 
@@ -301,23 +303,21 @@ def crawl(url: str) -> CrawledData:
             try:
                 sub_resp = requests.get(link, headers=HEADERS, timeout=TIMEOUT, allow_redirects=True)
                 sub_resp.raise_for_status()
-                combined_html += sub_resp.text
+                all_page_html.append(sub_resp.text)
                 sub_soup = BeautifulSoup(sub_resp.text, "html.parser")
 
-                # Pick up logo from subpages too if not found yet
                 if not result.logo_url:
                     logo = _find_logo(sub_soup, link)
                     if logo:
                         result.logo_url = logo
 
-                # Collect content images — gallery/portfolio pages can contribute more
                 is_gallery = any(kw in link.lower() for kw in ("galerie", "gallery", "bilder", "fotos", "portfolio", "referenz", "projekt"))
                 page_max_imgs = 6 if is_gallery else 3
                 page_imgs = _find_images(sub_soup, link, seen_image_urls, max_images=page_max_imgs)
                 result.company_image_urls.extend(page_imgs)
 
                 page_label = urlparse(link).path.strip("/").split("/")[-1].replace("-", " ").title() or "Seite"
-                sub_text = _clean_text(sub_soup, 3000)
+                sub_text = _clean_text(sub_resp.text, 3000)
                 if sub_text:
                     parts.append(f"=== {page_label} ===\n{sub_text}")
 
@@ -328,19 +328,19 @@ def crawl(url: str) -> CrawledData:
         result.found = True
         result.full_text = "\n\n".join(parts)
 
-        # Contact extraction — pass homepage soup for structured tag scanning first
-        contact = _extract_contact(combined_html, soup)
+        # Contact extraction uses fresh soups from raw HTML — not the decomposed ones
+        contact = _extract_contact(all_page_html)
         result.contact_phone = contact["phone"]
         result.contact_email = contact["email"]
         result.contact_address = contact["address"]
 
         print(
-            f"[website_crawler] Done: {len(parts)} pages crawled | "
-            f"images found: {len(result.company_image_urls)} | "
-            f"phone={'yes' if result.contact_phone else 'no'} | "
-            f"email={'yes' if result.contact_email else 'no'} | "
-            f"address={'yes' if result.contact_address else 'no'} | "
-            f"logo={'yes' if result.logo_url else 'no'}"
+            f"[website_crawler] Done: {len(parts)} pages | "
+            f"images: {len(result.company_image_urls)} | "
+            f"phone: {result.contact_phone or '(not found)'} | "
+            f"email: {result.contact_email or '(not found)'} | "
+            f"address: {result.contact_address or '(not found)'} | "
+            f"logo: {'yes' if result.logo_url else 'no'}"
         )
 
     except Exception as e:
