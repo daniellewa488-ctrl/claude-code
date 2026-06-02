@@ -27,9 +27,11 @@ STRATO_SFTP_ROOT = os.getenv("STRATO_SFTP_ROOT", "/httpdocs")
 # Preview base URL (your domain where demos live)
 PREVIEW_BASE_URL = os.getenv("PREVIEW_BASE_URL", "https://www.hannahs-webdesign.de")
 
-# Hugging Face — free FLUX.1-schnell image generation
-# Get free token at: https://huggingface.co/settings/tokens  (read-only token is enough)
-# If not set, falls back to Pollinations turbo (free)
+# Together AI — free FLUX.1-schnell image generation (recommended)
+# Sign up free at https://api.together.xyz → grab API key
+TOGETHER_API_KEY = os.getenv("TOGETHER_API_KEY", "")
+
+# Hugging Face — alternative FLUX.1-schnell (requires Pro account on HF)
 HF_TOKEN = os.getenv("HF_TOKEN", "")
 
 # Polling interval

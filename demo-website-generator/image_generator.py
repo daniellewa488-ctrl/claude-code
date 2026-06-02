@@ -2,6 +2,7 @@ import io
 import re
 import json
 import time
+import base64
 import random
 import requests
 from urllib.parse import quote
@@ -14,7 +15,9 @@ except ImportError:
     _PILLOW_OK = False
 
 POLLINATIONS_BASE = "https://image.pollinations.ai/prompt"
-TIMEOUT = 60  # turbo model; longer prompts can take up to 30s
+TOGETHER_ENDPOINT = "https://api.together.xyz/v1/images/generations"
+HF_ENDPOINT = "https://api-inference.huggingface.co/models/black-forest-labs/FLUX.1-schnell"
+TIMEOUT = 120
 
 # ── Image generation rules passed to Claude ──────────────────────────────────
 _IMAGE_RULES = """
@@ -278,21 +281,40 @@ def _download(url: str, retries: int = 2) -> bytes:
                 raise
 
 
-# ── Hugging Face FLUX.1-schnell (free) ───────────────────────────────────────
-HF_ENDPOINT = "https://api-inference.huggingface.co/models/black-forest-labs/FLUX.1-schnell"
+# ── Together AI — free FLUX.1-schnell ────────────────────────────────────────
 
+def _together_generate(prompt: str, width: int, height: int, seed: int) -> bytes:
+    """Free FLUX.1-schnell via Together AI. Sign up at https://api.together.xyz"""
+    import config as _cfg
+    headers = {
+        "Authorization": f"Bearer {_cfg.TOGETHER_API_KEY}",
+        "Content-Type": "application/json",
+    }
+    payload = {
+        "model": "black-forest-labs/FLUX.1-schnell-Free",
+        "prompt": prompt,
+        "width": width,
+        "height": height,
+        "steps": 4,
+        "seed": seed,
+        "n": 1,
+        "response_format": "b64_json",
+    }
+    resp = requests.post(TOGETHER_ENDPOINT, headers=headers, json=payload, timeout=TIMEOUT)
+    resp.raise_for_status()
+    b64 = resp.json()["data"][0]["b64_json"]
+    return base64.b64decode(b64)
+
+
+# ── Hugging Face FLUX.1-schnell (requires HF Pro account) ────────────────────
 
 def _hf_generate(prompt: str, width: int, height: int, seed: int) -> bytes:
-    """
-    Generate one image via Hugging Face Inference API — FLUX.1-schnell.
-    Completely free with a free HF account. Returns raw image bytes.
-    Get token at: https://huggingface.co/settings/tokens
-    """
+    """FLUX.1-schnell via Hugging Face Inference API (requires Pro account)."""
     import config as _cfg
     headers = {
         "Authorization": f"Bearer {_cfg.HF_TOKEN}",
         "Content-Type": "application/json",
-        "X-Wait-For-Model": "true",   # wait if model is loading instead of erroring
+        "X-Wait-For-Model": "true",
     }
     payload = {
         "inputs": prompt,
@@ -301,21 +323,25 @@ def _hf_generate(prompt: str, width: int, height: int, seed: int) -> bytes:
             "height": height,
             "num_inference_steps": 4,
             "seed": seed,
-            "guidance_scale": 0.0,   # schnell works best at 0
+            "guidance_scale": 0.0,
         },
     }
-    resp = requests.post(HF_ENDPOINT, headers=headers, json=payload, timeout=120)
+    resp = requests.post(HF_ENDPOINT, headers=headers, json=payload, timeout=TIMEOUT)
     resp.raise_for_status()
-    # HF returns raw image bytes directly
     return resp.content
 
 
-def _use_hf() -> bool:
+def _flux_provider() -> str:
+    """Return 'together', 'hf', or 'none'."""
     try:
         import config as _cfg
-        return bool(_cfg.HF_TOKEN)
+        if _cfg.TOGETHER_API_KEY:
+            return "together"
+        if _cfg.HF_TOKEN:
+            return "hf"
     except Exception:
-        return False
+        pass
+    return "none"
 
 
 def _generate_prompts_with_claude(data, crawled=None) -> list:
@@ -439,29 +465,24 @@ def generate(data, crawled=None) -> GeneratedImages:
             tasks.append((i, prompt, slot, dims, seed))
             ai_count += 1
 
-        use_hf = _use_hf()
-        provider = "Hugging Face FLUX.1-schnell (free)" if use_hf else "Pollinations turbo"
-        print(f"[image_generator] Generating {len(tasks)} AI images via {provider} (5 threads)...")
+        provider = _flux_provider()
+        provider_label = {"together": "Together AI FLUX.1-schnell (free)", "hf": "Hugging Face FLUX.1-schnell", "none": "none — no API key set"}.get(provider, provider)
+        print(f"[image_generator] Generating {len(tasks)} AI images via {provider_label} (5 threads)...")
 
         def _fetch_ai(task):
             i, prompt, slot, dims, seed = task
             filename = f"image-{slot:02d}.jpg"
             w = int(dims.split("width=")[1].split("&")[0])
             h = int(dims.split("height=")[1])
+            if provider == "none":
+                print(f"[image_generator] Skipping {filename} — no FLUX API key configured")
+                return (slot, filename, None)
             try:
                 print(f"[image_generator] Requesting {filename} ({w}x{h}, seed={seed})...")
-                if use_hf:
-                    try:
-                        b = _hf_generate(prompt, w, h, seed)
-                    except Exception as hf_err:
-                        print(f"[image_generator] HF failed ({type(hf_err).__name__}), falling back to Pollinations...")
-                        encoded = quote(prompt)
-                        url = f"{POLLINATIONS_BASE}/{encoded}?{dims}&nologo=true&model=turbo&seed={seed}"
-                        b = _download(url)
+                if provider == "together":
+                    b = _together_generate(prompt, w, h, seed)
                 else:
-                    encoded = quote(prompt)
-                    url = f"{POLLINATIONS_BASE}/{encoded}?{dims}&nologo=true&model=turbo&seed={seed}"
-                    b = _download(url)
+                    b = _hf_generate(prompt, w, h, seed)
                 print(f"[image_generator] ✓ {filename} ({len(b):,} bytes)")
                 return (slot, filename, b)
             except Exception as e:
@@ -506,18 +527,11 @@ def generate(data, crawled=None) -> GeneratedImages:
                 "clean vector illustration style, white background, "
                 "no text labels, suitable as brand mark, high quality"
             )
-            if _use_hf():
-                try:
-                    result.logo_bytes = _hf_generate(logo_prompt, 512, 512, base_seed)
-                except Exception as hf_err:
-                    print(f"[image_generator] HF logo failed ({type(hf_err).__name__}), falling back to Pollinations...")
-                    encoded = quote(logo_prompt)
-                    logo_url = f"{POLLINATIONS_BASE}/{encoded}?width=512&height=512&nologo=true&model=turbo&seed={base_seed}"
-                    result.logo_bytes = _download(logo_url)
-            else:
-                encoded = quote(logo_prompt)
-                logo_url = f"{POLLINATIONS_BASE}/{encoded}?width=512&height=512&nologo=true&model=turbo&seed={base_seed}"
-                result.logo_bytes = _download(logo_url)
+            prov = _flux_provider()
+            if prov == "together":
+                result.logo_bytes = _together_generate(logo_prompt, 512, 512, base_seed)
+            elif prov == "hf":
+                result.logo_bytes = _hf_generate(logo_prompt, 512, 512, base_seed)
             print(f"[image_generator] AI logo generated ({len(result.logo_bytes):,} bytes)")
         except Exception as e:
             print(f"[image_generator] AI logo generation failed: {e}")
